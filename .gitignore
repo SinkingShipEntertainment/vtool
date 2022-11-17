@@ -6,3 +6,7 @@
 /.settings
 /.idea
 **/temp
+
+# SSE
+_rez_build
+.vscode
