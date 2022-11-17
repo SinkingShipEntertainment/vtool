@@ -4,3 +4,7 @@
 /.pydevproject
 /.project
 /.settings
+
+# SSE
+_rez_build
+.vscode
