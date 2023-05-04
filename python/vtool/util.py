@@ -1,34 +1,19 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-from __future__ import absolute_import
-
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 import sys
-
-python_version = float('%s.%s' % (sys.version_info.major,sys.version_info.minor))
-
 import re
 import math
 import time
+import string
 import datetime
 import traceback
 import platform
 import os
 import base64
-
-if python_version < 3:
-    import __builtin__
-    from HTMLParser import HTMLParser
-else:
-    import builtins
-    from html.parser import HTMLParser
-    
-from functools import wraps
+import __builtin__
+from HTMLParser import HTMLParser
 
 temp_log = ''
 last_temp_log = ''
-
-global_tabs = 1
 
 def get_custom(name, default = ''):
     
@@ -45,35 +30,6 @@ def get_custom(name, default = ''):
         return default
     
     return value
-
-def stop_watch_wrapper(function):
-    @wraps(function)
-    def wrapper(*args, **kwargs):
-        
-        class_name = None
-        if args:
-            if hasattr(args[0], '__class__'):
-                class_name = args[0].__class__.__name__    
-        watch = StopWatch()
-        description = function.__name__
-        if class_name:
-            description = class_name + '.' + description
-        
-        watch.start(description, feedback = False)
-        watch.feedback = True
-        
-        return_value = None
-        
-        try:
-            return_value = function(*args, **kwargs)
-        except:
-            error(traceback.format_exc())
-        
-        watch.end()
-        
-        return return_value
-        
-    return wrapper
 
 class VetalaHTMLParser(HTMLParser):
 
@@ -173,7 +129,7 @@ class ControlName(object):
                     found.append(self.center_alias)
                     continue
         
-        full_name = '_'.join(found)
+        full_name = string.join(found, '_')
         
         if self.control_uppercase:
             full_name = full_name.upper()
@@ -203,33 +159,24 @@ def reset_code_builtins(builtins = None):
     for builtin in builtins:
         
         try:
-            if python_version < 3:
-                exec('del(__builtin__.%s)' % builtin)
-            else:
-                exec('del(builtins.%s)' % builtin)
+            exec('del(__builtin__.%s)' % builtin)
         except:
             pass
     
-def setup_code_builtins(builtin = None):
-    if not builtin:
-        builtin = get_code_builtins()
+def setup_code_builtins(builtins = None):
+    if not builtins:
+        builtins = get_code_builtins()
         
-    for b in builtin:
+    for builtin in builtins:
         
         try:
-            if python_version < 3:
-                exec('del(__builtin__.%s)' % b)
-            else:
-                exec('del(builtins.%s)' % b)
+            exec('del(__builtin__.%s)' % builtin)
         except:
             pass
         
-        builtin_value = builtin[b]
+        builtin_value = builtins[builtin]
         
-        if python_version < 3:
-            exec('__builtin__.%s = builtin_value' % b)
-        else:
-            exec('builtins.%s = builtin_value' % b)
+        exec('__builtin__.%s = builtin_value' % builtin)
 
 def initialize_env(name):
     """
@@ -239,7 +186,7 @@ def initialize_env(name):
     Args:
         name (str): Name of the new environment variable.
     """
-    if not name in os.environ:
+    if not os.environ.has_key(name):
         os.environ[name] = ''
 
 def set_env(name, value):
@@ -252,16 +199,17 @@ def set_env(name, value):
     """
     
     
-    #if name in os.environ:
+    if os.environ.has_key(name):
         
-    value = str(value)
-    
-    size = sys.getsizeof(value)
-    if size > 32767:
-        value = value[:30000]
-        value = 'truncated... ' + value 
-    os.environ[name] = value
-    
+        value = str(value)
+        
+        size = sys.getsizeof(value)
+        if size > 32767:
+            value = value[:30000]
+            value = 'truncated... ' + value 
+        os.environ[name] = value
+        
+        
 def get_env(name):
     """
     Get the value of an environment variable.
@@ -272,7 +220,7 @@ def get_env(name):
     Returns
         str:
     """
-    if name in os.environ:
+    if os.environ.has_key(name):
         return os.environ[name]
 
 def append_env(name, value):
@@ -288,12 +236,7 @@ def append_env(name, value):
         pass 
     
     set_env(name, env_value)
-
-def suggest_env(name, value):
     
-    if not name in os.environ:
-        set_env(name, value)
-        
 def start_temp_log():
     
     set_env('VETALA_KEEP_TEMP_LOG', 'True')
@@ -345,9 +288,9 @@ def add_to_PYTHONPATH(path):
 def profiler_event(frame, event, arg, indent = [0]):
     if event == "call":
         indent[0] += 2
-        print( "-" * indent[0] + "> ", event, frame.f_code.co_name)
+        print "-" * indent[0] + "> ", event, frame.f_code.co_name
     elif event == "return":
-        print( "<" + ("-" * indent[0]) + " ", event, frame.f_code.co_name) 
+        print "<" + ("-" * indent[0]) + " ", event, frame.f_code.co_name
         indent[0] -= 2
     
     return profiler_event
@@ -406,10 +349,7 @@ in_maya = False
 if is_in_maya():
     in_maya = True
     import maya.cmds as cmds
-    if python_version < 3:
-        import pymel.all as pymel
-    else:
-        pymel = None
+    import pymel.all as pymel
 
 def has_shotgun_api():
     """
@@ -447,7 +387,7 @@ def get_current_maya_location():
     """
     location = ''
     
-    if 'MAYA_LOCATION' in os.environ:
+    if os.environ.has_key('MAYA_LOCATION'):
         location = os.environ['MAYA_LOCATION']
     
     return location
@@ -502,15 +442,15 @@ def get_maya_version():
         import maya.cmds as cmds
         
         try:
-            version = str(cmds.about(api = True))[:4]
-            version = int(version)
-            
+            version = cmds.about(v = True)
+            split_version = version.split()
+            version = int(split_version[0])
             return version
         except:
             show('Could not get maya version.')
 
     if not is_in_maya():
-        return 0
+        return None
 
 def break_signaled():
     """
@@ -1623,7 +1563,7 @@ class FindUniqueString(object):
             if len(split_dot) > 1:
                 split_dot[-2] += str(number)
                 
-                self.increment_string = '.'.join(split_dot)
+                self.increment_string = string.join(split_dot, '.')
                 
             if len(split_dot) == 1:
                 self.increment_string = '%s%s' % (self.test_string, number)
@@ -1847,7 +1787,7 @@ def increment_first_number(input_string):
     
     return new_string
 
-def increment_last_number(input_string, padding = 1):
+def increment_last_number(input_string):
     """
     Up the value of the last number by 1.
     
@@ -1862,12 +1802,12 @@ def increment_last_number(input_string, padding = 1):
     if search:
         new_string = '%s%s%s' % (
                                  input_string[ 0 : search.start()], 
-                                 str(int(search.group()) + 1).zfill(padding),
+                                 int(search.group()) + 1,
                                  input_string[ search.end():]
                                  )
     
     if not search:
-        new_string = input_string + '1'.zfill(padding)
+        new_string = input_string + '1'
     
     return new_string
 
@@ -2020,7 +1960,7 @@ def show_list_to_string(*args):
         if not args:
             return ''
         
-        string_value = ' '.join(args)
+        string_value = string.join(args)
         
         string_value = string_value.replace('\n', '\t\n')
         if string_value.endswith('\t\n'):
@@ -2028,102 +1968,32 @@ def show_list_to_string(*args):
             
         return string_value
     except:
-        raise RuntimeError
+        raise(RuntimeError)
 
 def camel_to_underscore(name):
     s1 = re.sub('(.)([A-Z][a-z]+)', r'\1_\2', name)
     return re.sub('([a-z0-9])([A-Z])', r'\1_\2', s1).lower()
 
-def remove_side(name):
-    
-    ending_cases = ['_L','_R','_l','_r','_lf','_rt','_C','_c']
-    starting_cases = ['L_', 'R_', 'l_', 'r_','lf_','rt_','C_','c_']
-    anyplace_cases = ['Left', 'Right','left','right','_L_','_R_','_l_','_r_','_lf_','_rt_','Center','center','_C_','_c_']
-    
-    for end_case in ending_cases:
-        if name.endswith(end_case):
-            return name[:-2], name[-1]
-    
-    for start_case in starting_cases:
-        if name.startswith(start_case):
-            return name[2:], name[0]
-    
-    for anyplace_case in anyplace_cases:
-        find_index = name.find(anyplace_case)
-        if find_index > -1:
-            
-            replace_string = ''
-            
-            if anyplace_case.startswith('_') and anyplace_case.endswith('_'):
-                replace_string = '_'
-            
-            new_name = name[:find_index] + replace_string + name[find_index+len(anyplace_case):]
-            side = anyplace_case.strip('_')
-            
-            if not replace_string:
-                if new_name[find_index] == '_' and new_name[(find_index - 1)] == '_':
-                    new_name = new_name[:(find_index-1)] + '_' + new_name[(find_index+1):]
-            
-            return new_name, side
-        
-    return name,None
-
-def get_side_code(side_name):
-    """
-    given a side name like: Left,left,L,lf,l this will return L
-    given a side name like: Right,right,R,rt,r this will return R
-    given a side name like: Center,center,C,ct,c this will return C
-    """
-    
-    if side_name.find('C') > -1 or side_name.find('c') > -1:
-        return 'C'
-    
-    if side_name.find('L') > -1 or side_name.find('l') > -1:
-        return 'L'
-    
-    if side_name.find('R') > -1 or side_name.find('r') > -1:
-        return 'R'
-    
-#--- output
-
-def get_tabs():
-    
-    tab_text = '\t' * global_tabs
-    return tab_text
-    
-def get_log_tabs():
-    log_tabs = 0
-    
-    if global_tabs > 1:
-        log_tabs = global_tabs * 2
-        
-    tab_text = '\t' * (log_tabs - 1)
-    return tab_text
-
 def show(*args):
-    
-    log_value = None
-    
     try:
-        tab_str = get_tabs()
-        log_tab_str = get_log_tabs()
+        
         string_value = show_list_to_string(*args)
         log_value = string_value
         
-        string_value = string_value.replace('\n', '\nV:%s\t' % tab_str)
-        text = 'V:%s\t%s' % (tab_str, string_value)
+        string_value = string_value.replace('\n', '\nV:\t\t')
+        text = 'V:\t\t%s' % string_value
         
         #do not remove 
-        print(text)
+        print text
         
-        record_temp_log('\n%s%s' % (log_tab_str, log_value))
+        record_temp_log('\n%s' % log_value)
     
     except:
         #do not remove
-        text = 'V:%s\tCould not show %s' % (tab_str, args)
-        print(text)
-        record_temp_log('\n%s%s' % (tab_str, log_value))
-        raise RuntimeError('Error showing')
+        text = 'V:\t\tCould not show %s' % args
+        print text
+        record_temp_log('\n%s' % log_value)
+        raise(RuntimeError)
         
         
 def warning(*args):
@@ -2135,7 +2005,8 @@ def warning(*args):
         text = 'V: Warning!\t%s' % string_value
         #do not remove
         if not is_in_maya():
-            print( text )
+             
+            print text 
         if is_in_maya():
             import maya.cmds as cmds
             cmds.warning('V: \t%s' % string_value)
@@ -2143,7 +2014,7 @@ def warning(*args):
         record_temp_log('\nWarning!:  %s' % string_value)
         
     except:
-        raise RuntimeError
+        raise(RuntimeError)
         
 def error(*args):
     
@@ -2153,12 +2024,12 @@ def error(*args):
         #do not remove
         
         text = 'V: Error!\t%s' % string_value 
-        print(text)
+        print text
         
         record_temp_log('\n%s' % string_value)
         
     except:
-        raise RuntimeError
+        raise(RuntimeError)
     
 
 #--- rigs
@@ -2235,7 +2106,7 @@ def find_possible_combos(names, sort = False, one_increment = False):
                             if second_name == '%sN' % first_name:
                                 continue
                             
-                            name_combo = '_'.join( [names[inc],names[inc2]])
+                            name_combo = string.join( [names[inc],names[inc2]], '_' )                    
                             found.append(name_combo)
                                                       
                             sub_names = names[inc2:]             
@@ -2244,7 +2115,7 @@ def find_possible_combos(names, sort = False, one_increment = False):
                                 found_sub_combos = find_possible_combos(names[inc2:], False, True)                          
                                                                                       
                                 for combo in found_sub_combos:
-                                    sub_name_combo = '_'.join( [names[inc], combo])                              
+                                    sub_name_combo = string.join( [names[inc], combo], '_')                              
                                     
                                     found.append(sub_name_combo)
                                     
@@ -2283,7 +2154,7 @@ class QuickSort(object):
         if count > 1:
             pivot = list_of_numbers[0]
             
-            for inc in range(0, count):
+            for inc in xrange(0, count):
                 
                 value = list_of_numbers[inc]
                 if follower_list:
@@ -2367,8 +2238,7 @@ def print_python_dir_nicely(python_object):
     stuff = dir(python_object)
     
     for thing in stuff:
-        text = 'print( thing, ":", python_object.%s)' % thing
-        exec(text)
+        exec('print thing, ":", python_object.%s' % thing)
 
 def split_line(line, splitter = ';', quote_symbol = '"'):
     """
@@ -2387,27 +2257,6 @@ def replace_vtool(path_to_vtool):
     unload_vtool()
     sys.path.insert(0, path_to_vtool)
 
-def remove_modules_at_path(path):
-    
-    show('Removing modules at path: %s' % path)
-    #eg. path = 'S:/marz_scripts/shared/python/marz_studio'
-    
-    modules_to_pop = []
-    
-    for key in sys.modules.keys():
-        module = sys.modules[key]
-        if not module:
-            continue
-        if hasattr(module, '__file__'):
-            filepath = module.__file__
-            filepath = filepath.replace('\\','/')
-            if filepath.startswith(path):
-                modules_to_pop.append(key)
-                
-    for module in modules_to_pop:
-        show('Removing module: %s' % module)
-        sys.modules.pop(module)
-
 def unload_vtool():
     """
     Removed currently sourced modules.  
@@ -2417,8 +2266,6 @@ def unload_vtool():
     if is_in_maya():
         from vtool.maya_lib import ui_core
         ui_core.delete_scene_script_jobs()
-        from vtool.maya_lib import api
-        api.remove_check_after_save()
     
     modules = sys.modules
 
@@ -2443,30 +2290,3 @@ def unload_vtool():
     for key in found:
         show('Removing vtool module %s' % key)
         modules.pop(key)
-        
-def is_str(value):
-    
-    is_str = False
-    
-    if python_version < 3:
-        if type(value) == str or type(value) == unicode:
-            is_str = True
-    if python_version >= 3: 
-        if type(value) == str:
-            is_str = True
-                
-    return is_str
-
-def get_square_bracket_numbers(input_string):
-    
-    match = re.findall('(?<=\[)[0-9]*', input_string)
-    
-    if not match:
-        return
-    
-    found = []
-    
-    for thing in match:
-        found.append(eval(thing))
-    
-    return found

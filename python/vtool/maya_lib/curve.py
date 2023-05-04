@@ -1,14 +1,15 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import os
 
 #import util  do not import util, curve is used in util
-from . import api
-from .. import util, util_file
+import api
+import vtool.util_file
+import vtool.util
 
-if util.is_in_maya():
+if vtool.util.is_in_maya():
+    from vtool.maya_lib import core
+    from vtool.maya_lib import attr
     import maya.cmds as cmds
     import maya.mel as mel
 
@@ -16,16 +17,16 @@ current_path = os.path.split(__file__)[0]
 
 try:
     
-    custom_curve_path = util.get_custom('custom_curve_path', '')
+    custom_curve_path = vtool.util.get_custom('custom_curve_path', '')
     
     if custom_curve_path:
-        if util_file.is_dir(custom_curve_path):
-            curve_data = util_file.join_path(custom_curve_path, 'curve_data')
-            util_file.create_dir(curve_data)
-            util.show('Using custom curve directory: %s' % custom_curve_path)
+        if vtool.util_file.is_dir(custom_curve_path):
+            curve_data = vtool.util_file.join_path(custom_curve_path, 'curve_data')
+            vtool.util_file.create_dir(curve_data)
+            vtool.util.show('Using custom curve directory: %s' % custom_curve_path)
             current_path = custom_curve_path
 except:
-    util.warning('Could not load custom curves')
+    vtool.util.warning('Could not load custom curves')
 
 
 class CurveToData(object):
@@ -44,7 +45,7 @@ class CurveToData(object):
         for curve_shape in curve_shapes:
             
             if not curve_shape:
-                util.warning('%s is not a nurbs curve.' % curve_shape)
+                vtool.util.warning('%s is not a nurbs curve.' % curve_shape)
                 continue 
             
             self.curves.append(curve_shape)
@@ -53,7 +54,7 @@ class CurveToData(object):
         
     def _get_shapes(self, curve):
         
-        curves = util.convert_to_sequence(curve)
+        curves = vtool.util.convert_to_sequence(curve)
         
         curve_shapes = []
         
@@ -163,7 +164,7 @@ def get_nurbs_data_mel(curve):
     curve_inst = CurveToData(curve)
     return curve_inst.create_mel_list()
 
-def set_nurbs_data_mel(curve, mel_curve_data, z_up_compensate = True):
+def set_nurbs_data_mel(curve, mel_curve_data):
     
     match_shapes_to_data(curve, mel_curve_data)
     
@@ -172,7 +173,7 @@ def set_nurbs_data_mel(curve, mel_curve_data, z_up_compensate = True):
     
     shapes = get_shapes(curve)
     
-    util.convert_to_sequence(mel_curve_data)
+    vtool.util.convert_to_sequence(mel_curve_data)
     
     data_count = len(mel_curve_data)
     
@@ -180,7 +181,7 @@ def set_nurbs_data_mel(curve, mel_curve_data, z_up_compensate = True):
     
     if create_input:
         
-        util.warning('%s has history.  Disconnecting create attribute on curve. This will allow cv position change.' % curve)
+        vtool.util.warning('%s has history.  Disconnecting create attribute on curve. This will allow cv position change.' % curve)
         cmds.disconnectAttr(create_input, '%s.create' % curve)
     
     for inc in range(0, data_count):
@@ -192,14 +193,9 @@ def set_nurbs_data_mel(curve, mel_curve_data, z_up_compensate = True):
     
     cmds.currentUnit(linear = current_unit)
     
-    if z_up_compensate:
-        if cmds.upAxis(q = True, ax = True) == 'z':
-            cvs = '%s.cv[*]' % curve
-            cmds.rotate(90,0,0, cvs, relative = True)
-    
 class CurveDataInfo(object):
     
-    curve_data_path = util_file.join_path(current_path, 'curve_data')
+    curve_data_path = vtool.util_file.join_path(current_path, 'curve_data')
         
     def __init__(self):
         
@@ -230,8 +226,8 @@ class CurveDataInfo(object):
         
         curve_dict = self.library_curves[curve_library]
         
-        if not curve_name in curve_dict:
-            util.warning('%s is not in the curve library %s.' % (curve_name, curve_library))
+        if not curve_dict.has_key(curve_name):
+            vtool.util.warning('%s is not in the curve library %s.' % (curve_name, curve_library))
             
             return None, None
         
@@ -349,7 +345,7 @@ class CurveDataInfo(object):
         if skip_extension:
             filename = library_name
           
-        path = util_file.create_file(filename, self.curve_data_path)
+        path = vtool.util_file.create_file(filename, self.curve_data_path)
         self.active_library = library_name
         self.library_curves[library_name] = {}
         if skip_extension:
@@ -360,18 +356,18 @@ class CurveDataInfo(object):
     def load_data_file(self, path = None):
         
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
         if not path:
-            path = util_file.join_path(self.curve_data_path, '%s.data' % self.active_library)
+            path = vtool.util_file.join_path(self.curve_data_path, '%s.data' % self.active_library)
         
         last_line_curve = False
         curve_name = ''
         curve_data = ''
         curve_type = ''
         
-        data_lines = util_file.get_file_lines(path)
+        data_lines = vtool.util_file.get_file_lines(path)
         
         curve_data_lines = []
         
@@ -415,16 +411,16 @@ class CurveDataInfo(object):
                 
     def write_data_to_file(self):
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
-        path = util_file.join_path(self.curve_data_path, '%s.data' % self.active_library)
+        path = vtool.util_file.join_path(self.curve_data_path, '%s.data' % self.active_library)
         
         current_library = self.library_curves[self.active_library]
         
         lines = []
         
-        curves = list(current_library.keys())
+        curves = current_library.keys()
         curves.sort()
         
         for curve in curves:
@@ -443,7 +439,7 @@ class CurveDataInfo(object):
             for curve_data in curve_data_lines:
                 lines.append('%s' % curve_data)
         
-        util_file.write_lines(path, lines)
+        vtool.util_file.write_lines(path, lines)
         
         return path
         
@@ -452,15 +448,15 @@ class CurveDataInfo(object):
     
     def get_curve_names(self):
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
         return self.library_curves[self.active_library].keys()
         
-    def set_shape_to_curve(self, curve, curve_in_library, check_curve = False, add_curve_type_attribute = True,z_up_compensate = True):
+    def set_shape_to_curve(self, curve, curve_in_library, check_curve = False, add_curve_type_attribute = True):
         
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
         mel_data_list, original_curve_type = self._get_curve_data(curve_in_library, self.active_library)
@@ -480,9 +476,11 @@ class CurveDataInfo(object):
             if not is_curve:
                 return
         
+        #self._match_shapes_to_data(curve, mel_data_list)
+        
         if mel_data_list:
             
-            set_nurbs_data_mel(curve, mel_data_list, z_up_compensate=z_up_compensate)
+            set_nurbs_data_mel(curve, mel_data_list)
             
         rename_shapes(curve)
         
@@ -505,7 +503,7 @@ class CurveDataInfo(object):
             library_name = self.active_library
             
             if not self.active_library:
-                util.warning('Must set active library before running this function.')
+                vtool.util.warning('Must set active library before running this function.')
                 return
         
         mel_data_list = self._get_mel_data_list(curve)
@@ -530,14 +528,14 @@ class CurveDataInfo(object):
             library_name = self.active_library
             
             if not self.active_library:
-                util.warning('Must set active library before running this function.')
+                vtool.util.warning('Must set active library before running this function.')
                 return
                     
         transform = self._get_curve_parent(curve)
         
-        if library_name in self.library_curves:
+        if self.library_curves.has_key(library_name):
             
-            if transform in self.library_curves[library_name]:
+            if self.library_curves[library_name].has_key(transform):
             
                 self.library_curves[library_name].pop(transform)
                 
@@ -546,7 +544,7 @@ class CurveDataInfo(object):
         
     def create_curve(self, curve_name):
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
         curve_shape = cmds.createNode('nurbsCurve')
@@ -555,18 +553,17 @@ class CurveDataInfo(object):
         parent = cmds.rename( parent, curve_name )
         
         self.set_shape_to_curve(parent, curve_name)
-        
-        
+
         return parent
         
     def create_curves(self):
         if not self.active_library:
-            util.warning('Must set active library before running this function.')
+            vtool.util.warning('Must set active library before running this function.')
             return
         
         curves_dict = self.library_curves[self.active_library]
         
-        keys = list(curves_dict.keys())
+        keys = curves_dict.keys()
         
         keys.sort()
         
@@ -582,12 +579,6 @@ def add_curve_to_default(curve_name):
     
     curve_info.add_curve(curve_name, 'default_curves')
     curve_info.write_data_to_file()
-
-def create_curve_from_default(curve_name):
-    
-    curve_info = CurveDataInfo()
-    curve_info.set_active_library('default_curves')
-    curve_info.create_curve(curve_name)
 
 def get_library_shape_names():
     

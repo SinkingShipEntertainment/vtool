@@ -1,14 +1,15 @@
 # Copyright (C) 2017 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
 
-from ... import qt_ui, qt, util
-from .. import core
-from .. import geo
-from .. import space
-from .. import ui_core
+from vtool import qt_ui, qt
+from vtool import util
+from vtool.maya_lib import core
+from vtool.maya_lib import api
+from vtool.maya_lib import geo
+from vtool.maya_lib import space
+from vtool.maya_lib import rigs_util
+from vtool.maya_lib import ui_core
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+import maya.cmds as cmds
 
 
 class CheckView(ui_core.MayaWindowMixin):
@@ -87,7 +88,7 @@ class CheckView(ui_core.MayaWindowMixin):
                     
                     parent = cmds.listRelatives(object_name, p = True, f = True)[0]
                     
-                    if not parent in self.sub_list:
+                    if not self.sub_list.has_key(parent):
                         self.sub_list[parent] = []
                         
                     self.sub_list[parent].append(name)
@@ -124,7 +125,7 @@ class CheckView(ui_core.MayaWindowMixin):
             if cmds.objExists(name):
                 found.append(name)
             
-                if name in self.sub_list:
+                if self.sub_list.has_key(name):
                     for thing in self.sub_list[name]:
                         if cmds.objExists(thing):
                             sub_selection.append(thing)

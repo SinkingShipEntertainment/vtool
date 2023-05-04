@@ -1,7 +1,3 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-
 namespace = ''
 name = ''
 version = ''
@@ -90,7 +86,7 @@ def cache(cache_namespace = None):
         
         cache_path = os.path.join(output_dir, output_name)
         
-        print( 'Caching yeti node: %s   to path: %s' % (yeti_node, cache_path))
+        print 'Caching yeti node: %s   to path: %s' % (yeti_node, cache_path)
         
         if not cmds.pluginInfo('pgYetiMaya', query = True, loaded = True):
             cmds.loadPlugin('pyYetiMaya')

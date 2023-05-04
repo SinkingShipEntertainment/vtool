@@ -1,18 +1,18 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import os
 import sys
 import traceback
 import string
 import subprocess
+import threading
 import inspect
 from functools import wraps
+import __builtin__
 
-from .. import util
-from .. import util_file
-from .. import data
+from vtool import util
+from vtool import util_file
+from vtool import data
 
 in_maya = False
 
@@ -177,10 +177,10 @@ def decorator_process_run_script(function):
      
     @wraps(function)
     
-    def wrapper(self, script, hard_error = True, settings = None, return_status = False):
+    def wrapper(self, script, hard_error = True, settings = None):
         
         if in_maya:
-            core.refresh()
+            cmds.refresh()
         
         global __internal_script_running
         
@@ -194,39 +194,19 @@ def decorator_process_run_script(function):
                     cmds.undoInfo(openChunk = True)
             except:
                 util.warning('Trouble prepping maya for script')
-            
-            put = None
-            if self._data_override:
-                put = self._data_override._put
-            else:
-                put = self._put
-            
-            reset_process_builtins(self,{'put':put})
-            
+        
+        reset_process_builtins(self)
         value = None
         
         try:
-            if not cmds.ogs(q = True, pause = True):
-                cmds.ogs(pause = True)
-            value = function(self, script, hard_error, settings, return_status)
-            if cmds.ogs(q = True, pause = True):
-                cmds.ogs(pause = True)
-            util.global_tabs = 1
+            value = function(self, script, hard_error, settings)
         except:
-            if cmds.ogs(q = True, pause = True):
-                cmds.ogs(pause = True)
+            pass
         
         if 'reset' in locals():
             
             __internal_script_running = None
-            
-            put = None
-            if self._data_override:
-                put = self._data_override._put
-            else:
-                put = self._put
-            
-            reset_process_builtins(self, {'put':put})
+            reset_process_builtins(self)
             
             if in_maya:
                 cmds.undoInfo(closeChunk = True)
@@ -262,23 +242,28 @@ class Process(object):
         self._reset()
         self._update_options = True
         
-        self._data_parent_folder = None
+        
 
     def _reset(self):
         self.parts = []
         self.option_values = {}
-        
+        self.runtime_values = {}
         self.option_settings = None
         self.settings = None
-        self._control_inst = None        
-        self._data_override = None
+        self._control_inst = None
         self._runtime_globals = {}
-        self.reset_runtime()
-        self._data_folder = ''
-    
+        self._data_override = None
+        
+    def _get_override_path(self):
+        if not self._data_override:
+            return self.get_path()
+        if self._data_override:
+            return self._data_override.get_path()
+       
+        
     def _setup_options(self):
         
-        if not self.option_settings or self._update_options:
+        if not self.option_settings:
             self._load_options()
         
     def _load_options(self):
@@ -354,167 +339,56 @@ class Process(object):
                 
         return directory
     
-    def _get_override_path(self):
-        if not self._data_override:
-            return self.get_path()
-        if self._data_override:
-            return self._data_override.get_path()
-       
-    def _get_relative_process_path(self, relative_path, from_override = False):
+    def _reset_builtin(self, old_process = None, old_cmds = None, old_show = None, old_warning = None):
         
-        if not from_override:
-            path = self.get_path()
-        if from_override:
-            path = self._get_override_path()
+        reset_process_builtins(self)
         
-        if not path:
-            return None, None
-        
-        split_path = path.split('/')
-        split_relative_path = relative_path.split('/')
-        
-        up_directory = 0
-        
-        new_sub_path = []
-        new_path = []
-        
-        for sub_path in split_relative_path:
-            if sub_path == '..':
-                up_directory +=1
-            if sub_path != '..':
-                new_sub_path.append(sub_path)
-        
-        if up_directory:
-            
-            new_path = split_path[:-up_directory]
-            
-            new_path = new_path + new_sub_path
-                        
-        if up_directory == 0:
-            
-            new_path = split_path + split_relative_path
-            
-            new_path_test = '/'.join(new_path)
-            
-            if not util_file.is_dir(new_path_test):
-                
-                temp_split_path = list(split_path)
-                
-                temp_split_path.reverse()
-                
-                found_path = []
-                
-                for inc in range(0, len(temp_split_path)):
-                    if temp_split_path[inc] == split_relative_path[0]:
-                        found_path = temp_split_path[inc+1:]
-                
-                found_path.reverse()
-                new_path = found_path + split_relative_path
-        
-        process_name =  '/'.join([new_path[-1]])
-        process_path = '/'.join(new_path[:-1])
-        
-        util.show('Relative process name: %s and path: %s' % (process_name, process_path))
-        
-        return process_name, process_path
-
-    def _get_parent_process_path(self, from_override = False):
-        
-        if not from_override:
-            process_path = self.get_path()
-        if from_override:
-            process_path = self._get_override_path()
-        
-        dir_name = util_file.get_dirname(process_path)
-        
-        process = Process()
-        process.set_directory(dir_name)
-        
-        if process.is_process():
-        
-            basename = util_file.get_basename(dir_name)
-            path = util_file.get_dirname(dir_name)
-        
-            return basename, path
-        
-        else:
-            return None, None
-
-    def _get_code_file(self, name, basename = False):
-        """
-        Args: 
-            name (str): The name of a code folder in the process.
-            basename (bool): Wether to return the full path or just the name of the file.
-        
-        Returns:
-            str: The path to the code file with the specified name in the current process. 
-        """
-        
-        if name.endswith('.py'):
-            name = name[:-3]
-        
-        path = util_file.join_path(self.get_code_path(), name)
-        
-        code_name = util_file.get_basename(path)
-        
-        if not code_name == 'manifest':
-            code_name = code_name + '.py'
-        if code_name == 'manifest':
-            code_name = code_name + '.data'
-        
-        if basename:
-            return_value = code_name
-        if not basename:
-            
-            return_value = util_file.join_path(path, code_name)
-        
-        return return_value
-
-    def _get_enabled_children(self):
-        
-        path = self.get_path()
-        
-        found = []
-        disabled = []
-        
-        for root, dirs, files in os.walk(path):
-                
-            for folder in dirs:
-                
-                if folder.startswith('.'):
-                    continue
-                
-                full_path = util_file.join_path(root, folder)
-                
-                folder_name = os.path.relpath(full_path,path)
-                folder_name = util_file.fix_slashes(folder_name)
-                
-                if folder_name.startswith('.') or folder_name.find('/.') > -1:
-                    continue
-                
-                parent_disabled = False
-                for dis_folder in disabled:
-                    if folder_name.startswith(dis_folder):
-                        parent_disabled = True
-                        break
-                    
-                if parent_disabled:
-                    continue
-                
-                if not util_file.is_file_in_dir('.enable', full_path):
-                    disabled.append(folder_name)
-                    continue
-                
-                found.append(folder_name)
-        
-        found.reverse()
-        return found
-        
+    
     def _get_control_inst(self):
         
         if not self._control_inst:
             self._control_inst = util_file.ControlNameFromSettingsFile(self.get_path())   
 
+    def _refresh_process(self):
+        
+        self._setup_options()
+        self._setup_settings()
+        
+        self.runtime_values = {}
+        
+        if self._control_inst:
+            self._control_inst.set_directory(self.get_path())
+    
+    def _pass_module_globals(self,module):
+        """
+        this was a test that might go further in the future. 
+        the major problem was integer variables where not passable the first time. 
+        """
+        keys = dir(module)
+        
+        for key in keys:
+            
+            
+            
+            if key.startswith('__'):
+                continue
+            
+            result = eval('module.%s' % key)
+            
+            exec('self._runtime_globals["%s"] = result' % key)
+            
+        for global_key in self._runtime_globals:
+            
+            if not global_key in keys:
+                
+                module.goo = self._runtime_globals[global_key]
+                value = self._runtime_globals[global_key]
+                
+                assign = 'module.%s = value' % key 
+                
+                exec(assign)
+        
+        
     def _get_data_instance(self, name, sub_folder):
         path = self.get_data_path()
             
@@ -532,42 +406,15 @@ class Process(object):
             
         return instance, current_sub_folder
      
-
-    def _refresh_process(self):
-        
-        self._setup_options()
-        self._setup_settings()
-        
-        self.runtime_values = {}
-        
-        if self._control_inst:
-            self._control_inst.set_directory(self.get_path())
-    
-    def _pass_module_globals(self,module):
-        """
-        this was a test that might go further in the future. 
-        the major problem was integer variables where not passable the first time. 
-        """
-        
-        module_variable_dict = util_file.get_module_variables(module)
-        
-        self._runtime_globals.update(module_variable_dict)
-        
     def _source_script(self, script):
         
         util_file.delete_pyc(script)
         
-        put = None
-        if self._data_override:
-            put = self._data_override._put
-        else:
-            put = self._put
+        self._reset_builtin()
         
-        reset_process_builtins(self, {'put': put})
-        setup_process_builtins(self, {'put': put})
+        setup_process_builtins(self)
         
-        util.show('Sourcing: %s' % script)
-        util.show('\n')
+        util.show('Sourcing %s' % script)
         
         module = util_file.source_python_module(script)
         
@@ -610,8 +457,7 @@ class Process(object):
                 
         
         if not option_type == 'script':
-            
-            if util.is_str(value):
+            if type(value) == str or type(value) == unicode:
                 eval_value = None
                 try:
                     if value:
@@ -624,7 +470,7 @@ class Process(object):
                         new_value = eval_value
                         value = eval_value
             
-            if util.is_str(value):
+            if type(value) == str or type(value) == unicode:
                 if value.find(',') > -1:
                     new_value = value.split(',')
             
@@ -633,7 +479,54 @@ class Process(object):
         return new_value
             
 
-    
+    def _get_parent_process_path(self, from_override = False):
+        
+        if not from_override:
+            process_path = self.get_path()
+        if from_override:
+            process_path = self._get_override_path()
+        
+        dir_name = util_file.get_dirname(process_path)
+        
+        process = Process()
+        process.set_directory(dir_name)
+        
+        if process.is_process():
+        
+            basename = util_file.get_basename(dir_name)
+            path = util_file.get_dirname(dir_name)
+        
+            return basename, path
+        
+        else:
+            return None, None
+
+    def _get_code_file(self, name, basename = False):
+        """
+        Args: 
+            name (str): The name of a code folder in the process.
+            basename (bool): Wether to return the full path or just the name of the file.
+        
+        Returns:
+            str: The path to the code file with the specified name in the current process. 
+        """
+        
+        path = util_file.join_path(self.get_code_path(), name)
+       
+        code_name = util_file.get_basename(path)
+        
+        if not code_name == 'manifest':
+            code_name = code_name + '.py'
+        if code_name == 'manifest':
+            code_name = code_name + '.data'
+        
+        if basename:
+            return_value = code_name
+        if not basename:
+            
+            return_value = util_file.join_path(path, code_name)
+        
+        return return_value
 
     def set_directory(self, directory):
         """
@@ -789,6 +682,64 @@ class Process(object):
         
         
         return util_file.get_basename(name)
+    
+    def _get_relative_process_path(self, relative_path, from_override = False):
+        
+        if not from_override:
+            path = self.get_path()
+        if from_override:
+            path = self._get_override_path()
+        
+        if not path:
+            return None, None
+        
+        split_path = path.split('/')
+        split_relative_path = relative_path.split('/')
+        
+        up_directory = 0
+        
+        new_sub_path = []
+        new_path = []
+        
+        for sub_path in split_relative_path:
+            if sub_path == '..':
+                up_directory +=1
+            if sub_path != '..':
+                new_sub_path.append(sub_path)
+        
+        if up_directory:
+            
+            new_path = split_path[:-up_directory]
+            
+            new_path = new_path + new_sub_path
+                        
+        if up_directory == 0:
+            
+            new_path = split_path + split_relative_path
+            
+            new_path_test = string.join(new_path, '/')
+            
+            if not util_file.is_dir(new_path_test):
+                
+                temp_split_path = list(split_path)
+                
+                temp_split_path.reverse()
+                
+                found_path = []
+                
+                for inc in range(0, len(temp_split_path)):
+                    if temp_split_path[inc] == split_relative_path[0]:
+                        found_path = temp_split_path[inc+1:]
+                
+                found_path.reverse()
+                new_path = found_path + split_relative_path
+        
+        process_name = string.join([new_path[-1]], '/')
+        process_path = string.join(new_path[:-1], '/')
+        
+        util.show('Relative process name: %s and path: %s' % (process_name, process_path))
+        
+        return process_name, process_path
         
     def get_relative_process(self, relative_path):
         """
@@ -903,8 +854,7 @@ class Process(object):
     def get_empty_process(self, path = None):
         
         process = Process()
-        if path:
-            process.set_directory(path)
+        process.set_directory(path)
         return process
         
     def get_backup_path(self, directory = None):
@@ -948,7 +898,7 @@ class Process(object):
         backup_path = util_file.join_path(backup_directory, self.backup_folder_name)    
         
         return backup_path
-
+        
     def backup(self, comment = 'Backup', directory = None):
         
         backup_path = self.get_backup_path(directory)
@@ -987,25 +937,16 @@ class Process(object):
         
         return False
         
-    def get_data_path(self, in_folder = True):
+    def get_data_path(self):
         """
         Returns:
             str: The path to the data folder for this process.
         """
-        
-        data_path = None
-        
         if not self._data_override:
-            data_path = self._get_path(self.data_folder_name)
+            return self._get_path(self.data_folder_name)
         
         if self._data_override:
-            data_path =  self._data_override._get_path(self.data_folder_name)
-            
-        
-        if data_path and self._data_parent_folder and in_folder:
-            data_path = util_file.join_path(data_path, self._data_parent_folder)
-            
-        return data_path
+            return self._data_override._get_path(self.data_folder_name)
     
     def get_data_folder(self, name, sub_folder = None):
         """
@@ -1016,22 +957,34 @@ class Process(object):
             str: The path to the data folder with the same name if it exists.
         """
         
-        if not sub_folder:
-            folder =  util_file.join_path(self.get_data_path(), name)
-        if sub_folder:
-            folder = util_file.join_path(self.get_data_sub_path(name), sub_folder) 
-            
-        if util_file.is_dir(folder, case_sensitive = True):
-            return folder
-
-    def get_data_sub_path(self, name):
-        """
-        Get that path where sub folders live
-        """
+        folders = self.get_data_folders()
         
-        path = self._create_sub_data_folder(name)
+        if not folders:
+            return
         
-        return path
+        for folder in folders:
+            if folder == name:
+                
+                if not sub_folder:
+                    return util_file.join_path(self.get_data_path(), name)
+                if sub_folder:
+                    sub_folder_path = util_file.join_path(self.get_data_sub_path(name), sub_folder) 
+                    return  sub_folder_path
+    
+    def cache_data_type_read(self, name):
+        
+        data_folder = data.DataFolder(name, self.get_data_path())
+        
+        data_type = util_file.join_path(data_folder.folder_path, 'data.json')
+        
+        util_file.ReadCache.cache_read_data(data_type)
+        
+    def delete_cache_data_type_read(self, name):
+        
+        data_folder = data.DataFolder(name, self.get_data_path())
+        data_type = util_file.join_path(data_folder.folder_path, 'data.json')
+        
+        util_file.ReadCache.remove_read_data(data_type)
        
     def get_data_type(self, name):
         """
@@ -1041,11 +994,6 @@ class Process(object):
         Returns:
             str: The name of the data type of the data folder with the same name if it exists.
         """
-        
-        data_folder = self.get_data_folder(name)
-        data_file = util_file.join_path(data_folder, 'data.json')
-        if not util_file.is_file(data_file):
-            return
         
         data_folder = data.DataFolder(name, self.get_data_path())
         data_type = data_folder.get_data_type()
@@ -1115,11 +1063,7 @@ class Process(object):
         """
         directory = self.get_data_path()
         
-        folders =  util_file.get_folders(directory)
-        if '.sub' in folders:
-            folders.remove('.sub')
-            
-        return folders  
+        return util_file.get_folders(directory)  
      
     def get_data_instance(self, name, sub_folder = None):
         """
@@ -1132,14 +1076,6 @@ class Process(object):
             This gives access to the data functions like import_data found in the data type class.
         """
         path = self.get_data_path()
-        
-        named_path = self.get_data_folder(name)
-        
-        data_file = util_file.join_path(named_path, 'data.json')
-        if not util_file.exists(data_file):
-            return
-            
-        
         data_folder = data.DataFolder(name, path)
         
         return data_folder.get_folder_data_instance()
@@ -1159,7 +1095,6 @@ class Process(object):
         path = self.get_data_path()
         
         test_path = util_file.join_path(path, name)
-        
         if not sub_folder:
             test_path = util_file.inc_path_name(test_path)
         name = util_file.get_basename(test_path)
@@ -1203,7 +1138,14 @@ class Process(object):
         
         return self.create_data(data_name, data_type, sub_folder_name)
         
-
+    def get_data_sub_path(self, name):
+        """
+        Get that path where sub folders live
+        """
+        
+        path = self._create_sub_data_folder(name)
+        
+        return path
     
     def get_data_sub_folder_names(self, data_name):
         
@@ -1230,14 +1172,11 @@ class Process(object):
         """
         Get the currently set sub folder and its data type
         """
-        
         data_folder = data.DataFolder(name, self.get_data_path())
         data_type = data_folder.get_data_type()
         sub_folder = data_folder.get_sub_folder()
         
         return sub_folder, data_type
-    
-    #---- data IO
     
     def import_data(self, name, sub_folder = None):
         """
@@ -1253,13 +1192,10 @@ class Process(object):
         
         data_folder_name = self.get_data_folder(name)
         
-        if not sub_folder:
-            util.show('Import data in: %s' % name)
-        if sub_folder:
-            util.show('Import data %s in sub folder %s' % (name, sub_folder))
+        util.show('Import data in: %s' % data_folder_name)
         
         if not util_file.is_dir(data_folder_name):
-            util.warning('%s data folder does not exist in %s' % (name, self.get_data_path()))
+            util.warning('%s data does not exist in %s' % (name, self.get_name()) )
             return
         
         instance, original_sub_folder = self._get_data_instance(name, sub_folder)
@@ -1281,7 +1217,7 @@ class Process(object):
         util.show('Open data in: %s' % data_folder_name)
         
         if not util_file.is_dir(data_folder_name):
-            util.show('%s data does not exist in %s' % (name, self.get_data_path()) )
+            util.show('%s data does not exist in %s' % (name, self.get_name()) )
             return
             
         instance, original_sub_folder = self._get_data_instance(name, sub_folder)
@@ -1309,7 +1245,7 @@ class Process(object):
         util.show('Reference data in: %s' % data_folder_name)
         
         if not util_file.is_dir(data_folder_name):
-            util.show('%s data does not exist in %s' % (name, self.get_data_path()) )
+            util.show('%s data does not exist in %s' % (name, self.get_name()) )
             return
 
         instance, original_sub_folder = self._get_data_instance(name, sub_folder)
@@ -1338,12 +1274,6 @@ class Process(object):
             None
         """
         
-        data_folder_name = self.get_data_folder(name)
-        if not util_file.is_dir(data_folder_name):
-            util.show('%s data does not exist in %s' % (name, self.get_data_path()) )
-            util.show('Could not save')
-            return
-        
         instance, original_sub_folder = self._get_data_instance(name, sub_folder)
                 
         if not comment:
@@ -1370,28 +1300,15 @@ class Process(object):
             None
         """
         
-        data_folder_name = self.get_data_folder(name)
-        if not util_file.is_dir(data_folder_name):
-            util.show('%s data does not exist in %s' % (name, self.get_data_path()) )
-            util.show('Could not export')
-            return
-        
         instance, original_sub_folder = self._get_data_instance(name, sub_folder)
                 
         if not comment:
             comment = 'Exported through process class with no comment.'
         
         if hasattr(instance, 'export_data'):
-            selection_pass = False
-            if util.python_version > 3:
-                signature = inspect.signature(instance.export_data)
-                if 'selection' in signature.parameters and list_to_export:
-                    selection_pass = True
-            if util.python_version < 3:
-                arg_spec = inspect.getargspec(instance.export_data)
-                if 'selection' in arg_spec.args and list_to_export:
-                    selection_pass = True
-            if selection_pass:
+            
+            arg_spec = inspect.getargspec(instance.export_data)
+            if 'selection' in arg_spec.args:
                 exported = instance.export_data(comment, selection = list_to_export)
             else:
                 exported = instance.export_data(comment)
@@ -1405,17 +1322,6 @@ class Process(object):
         
         #return False
             
-    
-    #---- data utils
-    
-    def set_data_parent_folder(self, folder_name):
-        """
-        Within the data path, sets folder_name as the parent folder to the data 
-        """
-        self._data_parent_folder = folder_name
-    
-    def remove_data_parent_folder(self):
-        self._data_parent_folder = None
     
     def rename_data(self, old_name, new_name):
         """
@@ -1480,21 +1386,6 @@ class Process(object):
         
         util_file.delete_versions(folder, keep)
         
-    
-    def cache_data_type_read(self, name):
-        
-        data_folder = data.DataFolder(name, self.get_data_path())
-        
-        data_type = util_file.join_path(data_folder.folder_path, 'data.json')
-        
-        util_file.ReadCache.cache_read_data(data_type)
-        
-    def delete_cache_data_type_read(self, name):
-        
-        data_folder = data.DataFolder(name, self.get_data_path())
-        data_type = util_file.join_path(data_folder.folder_path, 'data.json')
-        
-        util_file.ReadCache.remove_read_data(data_type)
         
     #code ---
     
@@ -1553,7 +1444,7 @@ class Process(object):
         if code_name:
             directory = util_file.join_path(directory, code_name)
         
-        return util_file.get_code_folders(directory, recursive = True)  
+        return util_file.get_folders_without_prefix_dot(directory, recursive = True)  
     
     def get_top_level_code_folders(self):
         
@@ -1641,7 +1532,7 @@ class Process(object):
         
         return data_type
     
-    def get_code_files(self, basename = False, fast_with_less_checking = False):
+    def get_code_files(self, basename = False):
         """
         Args: 
             basename (bool): Wether to return the full path or just the name of the file.
@@ -1651,6 +1542,7 @@ class Process(object):
             If basename is True, only return the file names without the path.             
         """
         
+        
         directory = self.get_code_path()
         
         #folders = util_file.get_folders(directory)
@@ -1659,17 +1551,8 @@ class Process(object):
         
         folders = self.get_code_folders()
         
+        
         for folder in folders:
-            
-            path = util_file.join_path(directory, folder)
-            code_file = util_file.join_path(path, (util_file.get_basename(folder) + '.py'))
-            
-            if util_file.is_file(code_file):
-                files.append(code_file)
-                continue
-                        
-            if fast_with_less_checking:
-                continue
             
             data_folder = data.DataFolder(folder, directory)
             data_instance = data_folder.get_folder_data_instance()
@@ -1681,12 +1564,13 @@ class Process(object):
                 if not basename:
                     files.append(file_path)
                 if basename:
+                    
                     rel_file_path = util_file.remove_common_path_simple(directory, file_path)
                     split_path = rel_file_path.split('/')
                     
-                    code_path = '/'.join(split_path[:-1])
+                    code_path = string.join(split_path[:-1], '/')
                     files.append(code_path)
-                    
+
         return files
     
     def get_code_file(self, name, basename = False):
@@ -1703,26 +1587,10 @@ class Process(object):
         
         
         if not util_file.exists(path):
-            
-            first_matching = self.get_first_matching_code(name)
-            
-            if first_matching:
-                return first_matching
-            
             util.warning('Could not find code file: %s' % name)
             return
         
         return path
-
-    def get_first_matching_code(self, name):
-        codes = self.get_code_files(basename = False, fast_with_less_checking = True)
-        
-        short_name = util_file.get_basename(name)
-        short_name = util_file.remove_extension(short_name)
-        
-        for code in codes:
-            if code.endswith('%s.py' % short_name):
-                return code
 
     def get_code_name_from_path(self, code_path):
         
@@ -1737,10 +1605,10 @@ class Process(object):
                 if last_part == parts[-2]:
                     
                     if len(parts) > 2:
-                        return '/'.join(parts[:-1])
+                        return string.join(parts[:-1], '/')
 
                 if last_part != parts[-2]:
-                    return '/'.join(parts)
+                    return string.join(parts, '/')
                     
             if len(parts) == 2:
                 return parts[0]
@@ -1983,31 +1851,31 @@ class Process(object):
         
         self._setup_options()
         
-        show_value = None
-        
         if group:
             name = '%s.%s' % (group,name)
         if not group:
             name = '%s' % name
         
+        print_value = None
+        
         if option_type == 'script':
-            show_value = value
+            print_value = value
             value = [value, 'script']
         if option_type == 'dictionary':
-            show_value = value
+            print_value = value
             value = [value, 'dictionary']
         if option_type == 'reference.group':
-            show_value = value
+            print_value = value
             value = [value, 'reference.group']
         if option_type == 'note':
             value = str(value)
-            show_value = value
+            print_value = value
             value = [value, 'note']
         
         has_option = self.option_settings.has_setting(name) 
 
-        if not has_option and show_value != None:
-            util.show('Creating option: %s with a value of: %s' % (name, show_value))
+        if not has_option:
+            util.show('Creating option: %s with a value of: %s' % (name, print_value))
         
         self.option_settings.set(name, value)
         
@@ -2032,30 +1900,7 @@ class Process(object):
         value = self.option_settings.get(name)
         
         return value
-    
-    def set_option_index(self, index, name, group = None):
-        self._setup_options()
         
-        if group:
-            name = '%s.%s' % (group,name)
-        if not group:
-            name = '%s' % name
-        
-        self.option_settings.settings_order
-        
-        remove = False
-        
-        for thing in self.option_settings.settings_order:
-            if thing == name:
-                remove = True
-        
-        if remove:
-            self.option_settings.settings_order.remove(name)
-        
-        self.option_settings.settings_order.insert(index, name)
-        
-        self.option_settings._write()
-     
     def get_option(self, name, group = None):
         """
         Get an option by name and group
@@ -2066,17 +1911,9 @@ class Process(object):
         
         if value == None:
             
-            match_value = self.get_option_match_and_group(name, return_first = True)
-            
-            value = match_value[0]
-            match_group = match_value[1]
-            
-            
+            value = self.get_option_match(name, return_first = True)
             if value and group:
-                if not match_group.endswith( group ):
-                    util.warning('Access option: %s, but it was not in group: % s' % (name, group))
-            
-            group = match_group
+                util.warning('Access option: %s, but it was not in group: % s' % (name, group))
             
             if value == None:
                 util.warning('Trouble accessing option %s.' % name)
@@ -2094,38 +1931,8 @@ class Process(object):
         util.show('Accessed - Option: %s, Group: %s, value: %s' % (name, group, value))
         
         return value
-    
-    def get_option_match_and_group(self, name, return_first = True):
-        """
-        Try to find a matching option in all the options
-        Return the matching value and group
-        """
         
-        self._setup_options()
-        
-        option_dict = self.option_settings.settings_dict
-        
-        found = {}
-        
-        for key in option_dict:
-            
-            split_key = key.split('.')
-            group = '.'.join(split_key[:-1])
-            
-            if split_key[-1] == name:
-                if return_first:
-                    
-                    value = self._format_option_value(option_dict[key])
-                    
-                    return value,group
-                
-                found[name] = [value, group]
-        
-        if not found:
-            found = None
-        
-        return found
-    
+
     def get_option_match(self, name, return_first = True):
         """
         Try to find a matching option in all the options
@@ -2138,13 +1945,13 @@ class Process(object):
         found = {}
         
         for key in option_dict:
-            
-            split_key = key.split('.')
-            if split_key[-1] == name:
+            if key.endswith(name):
+                
                 if return_first:
                     
                     value = self._format_option_value(option_dict[key])
                     
+                    util.show('Accessed - Option: %s, value: %s' % (name, value))
                     return value
                 
                 found[name] = value
@@ -2177,14 +1984,6 @@ class Process(object):
             options = self.option_settings.get_settings()
             
         return options
-        
-    def get_option_name_at_index(self, index):
-        count = len(self.option_settings.settings_order)
-        
-        if index >= count:
-            util.warning('Option index out of range')
-        
-        return self.option_settings.settings_order[index]
         
     def get_option_file(self):
         
@@ -2253,7 +2052,7 @@ class Process(object):
             split_line = line.split()
             if len(split_line):
                 
-                script_name = ' '.join(split_line[:-1])
+                script_name = string.join(split_line[:-1])
                 
                 scripts.append(script_name)
                 
@@ -2297,7 +2096,7 @@ class Process(object):
             
             if len(split_line):
                 
-                script_name = ' '.join(split_line[:-1])
+                script_name = string.join(split_line[:-1])
                 
                 manifest_dict[script_name] = False
                 
@@ -2340,7 +2139,7 @@ class Process(object):
         
         return filename
     
-    def get_manifest_scripts(self, basename = True, fast_with_less_checks = False):
+    def get_manifest_scripts(self, basename = True):
         """
         Args:
             basename (bool): Wether to return the full path or just the name of the file. 
@@ -2356,7 +2155,7 @@ class Process(object):
         if not util_file.is_file(manifest_file):
             return
         
-        files = self.get_code_files(False, fast_with_less_checking=fast_with_less_checks)
+        files = self.get_code_files(False)
         
         scripts, states = self.get_manifest()
         
@@ -2561,10 +2360,6 @@ class Process(object):
         
         scripts, states = self.get_manifest()
         
-        if not scripts:
-            util.warning('Could not update state on %s, because it is not in the manifest' % script_name)
-            return
-        
         for inc in range(0, len(scripts)):
             
             script = scripts[inc]
@@ -2723,7 +2518,7 @@ class Process(object):
     
     #--- run
     @decorator_process_run_script
-    def run_script(self, script, hard_error = True, settings = None, return_status = False):
+    def run_script(self, script, hard_error = True, settings = None):
         """
         Run a script in the process.
         
@@ -2735,16 +2530,16 @@ class Process(object):
             str: The status from running the script. This includes error messages.
         """
         
-        self._setup_options()
+        if self._update_options:
+            self.option_settings = None
+            self._setup_options()
         
         orig_script = script
         
         status = None
-        result = None
         
         init_passed = False
         module = None
-        
         
         try:
             
@@ -2753,11 +2548,8 @@ class Process(object):
                 script = self._get_code_file(script)
             
             if not util_file.is_file(script):
-                script = self.get_first_matching_code(script)
-                
-                if not script:
-                    util.show('Could not find script: %s' % orig_script)
-                    return
+                util.show('Could not find script: %s' % orig_script)
+                return
             
             name = util_file.get_basename(script)
             
@@ -2766,10 +2558,10 @@ class Process(object):
                     if not external_code_path in sys.path:
                         sys.path.append(external_code_path)
             
-            util.show('\n------------------------------------------------')
             message = 'START\t%s\n\n' % name
+            
+            util.show('\n------------------------------------------------')
             util.show(message)
-            util.global_tabs = 2
             
             module, init_passed, status = self._source_script(script)
             
@@ -2796,19 +2588,9 @@ class Process(object):
                         #for legacy, if process was set to None override it with this process
                         module.process = self
                     
-                    result = module.main()
-                    put = None
-                    if self._data_override:
-                        put = self._data_override._put
-                        
-                    else:
-                        put = self._put
+                    module.main()
+                    status = 'Success'
                     
-                    put.last_return = result
-                    self._runtime_globals['last_return'] = result
-                    
-                status = 'Success'
-                
             except Exception:
                 
                 status = traceback.format_exc()
@@ -2816,22 +2598,16 @@ class Process(object):
                 if hard_error:
                     util.error('%s\n' % status)
                     raise Exception('Script errored on main. %s' % script )
-            
-            self._pass_module_globals(module)
-            
+                
         del module
         
         if not status == 'Success':
             util.show('%s\n' % status)
         
-        util.global_tabs = 1
         message = '\nEND\t%s\n\n' % name
         util.show(message)
         
-        if return_status:
-            return status
-        else:
-            return result
+        return status
         
     def run_option_script(self, name, group = None, hard_error = True):
         
@@ -2853,10 +2629,7 @@ class Process(object):
                     if not external_code_path in sys.path:
                         sys.path.append(external_code_path)
             
-            pass_process = self
-            if self._data_override:
-                pass_process = self._data_override
-            builtins = get_process_builtins(pass_process)
+            builtins = get_process_builtins(self)
             
             exec(script, globals(), builtins)
             status = 'Success'
@@ -2889,7 +2662,7 @@ class Process(object):
                 cmds.select(cl = True)
         
         try:
-            status = self.run_script(script, hard_error=True, return_status = True)
+            status = self.run_script(script, hard_error=True)
         except:
             if hard_error:
                 util.error('%s\n' % status)
@@ -2912,7 +2685,6 @@ class Process(object):
         
         #processing children
         children = self.get_code_children(script)
-        child_count = len(children)
         
         manifest_dict = self.get_manifest_dict()
 
@@ -2920,13 +2692,12 @@ class Process(object):
         
         if in_maya:
             
-            progress_bar = core.ProgressBar('Process Group', child_count)
+            progress_bar = core.ProgressBar('Process Group', len(children))
             progress_bar.status('Processing Group: getting ready...')
         
         for child in children:
             
             if progress_bar:
-                progress_bar.set_count(child_count)
                 progress_bar.status('Processing: %s' % script)
                 
                 if progress_bar.break_signaled():
@@ -2963,7 +2734,7 @@ class Process(object):
                 
                 if not children:
                     try:
-                        status = self.run_script(child, hard_error=True, return_status = True)
+                        status = self.run_script(child, hard_error=True)
                     except:
                         if hard_error:
                             util.error('%s\n' % status)
@@ -3103,7 +2874,7 @@ class Process(object):
                     cmds.select(cl = True)
                 
                 try:
-                    status = self.run_script(script, hard_error=False, return_status = True)
+                    status = self.run_script(script, hard_error=False)
                 except:
                     status = 'fail'
                 self._update_options = True
@@ -3173,7 +2944,7 @@ class Process(object):
             The value stored in set_runtime_value.
         """
         
-        if name in self.runtime_values:
+        if self.runtime_values.has_key(name):
             
             value = self.runtime_values[name]
             
@@ -3190,13 +2961,13 @@ class Process(object):
             list: keys in runtime value dictionary.
         """
         
-        return list(self.runtime_values.keys())
+        return self.runtime_values.keys()
     
+    def set_runtime_dict(self, dict_value):
+        self.runtime_values = dict_value
+ 
     def set_data_override(self, process_inst):
         self._data_override = process_inst
-        
-    def get_data_override(self):
-        return self._data_override
  
     def run_batch(self):
         process_path = self.get_path()
@@ -3209,71 +2980,46 @@ class Process(object):
  
     def run_deadline(self):
         
-        path = self.get_path()
-        name = self.get_basename()
-        stamp = util_file.get_date_and_time()
-        batch_name = 'Vetala Batch: %s       (%s)' % (name,util_file.get_date_and_time(separators=False))
+        deadline_command = util_file.get_deadline_command_from_settings()
+        mayapy = util_file.get_mayapy()
+        if not mayapy:
+            mayapy = 'python'
+        batch_file = util_file.get_process_batch_file()
         
-        sub_processes = self._get_enabled_children()
+        if not deadline_command:
+            return
         
-        sub_process_dict = {}
+        settings = util_file.get_vetala_settings_inst()
+        pool = settings.get('deadline_pool')
+        group = settings.get('deadline_group')
+        department = settings.get('deadline_department')
         
-        for sub_process in sub_processes:
-            sub_path = util_file.join_path(path, sub_process)
-            
-            dependents = []
-            for key in sub_process_dict:
-                
-                key_id = sub_process_dict[key]
-                
-                if key.startswith(sub_process):
-                    dependents.append(key_id)
+        #vetala_path = util.get_env('VETALA_PATH')
+        vetala_process = util.get_env('VETALA_CURRENT_PROCESS')
         
-            sub_job_id = run_deadline(sub_path, sub_process, parent_jobs = dependents, batch_name = batch_name)
+        command = []
         
-            sub_process_dict[sub_process] = sub_job_id
+        command.append(deadline_command)
+        command.append('-SubmitCommandLineJob')
+        command.append('-executable %s' % mayapy)
+        command.append('-arguments %s' % batch_file)
+        command.append('-chunksize 1')
+        if pool:
+            command.append('-pool ' + pool)
+        if group:
+            command.append('-group ' + group)
+        command.append('-priority 100')
+        command.append('-name "Vetala Process: %s"' % vetala_process)
+        if department:
+            command.append('-department ' + department)
         
-        all_dependents =  sub_process_dict.values()
+        #command.append('-prop EnvironmentKeyValue0=VETALA_PATH=%s' % vetala_path)
+        command.append('-prop IncludeEnvironment=true')
+        #command.append('-prop PreJobScript=%s' % batch_file)
         
-        run_deadline(path, name, parent_jobs = all_dependents, batch_name = batch_name)
+        command = string.join(command)
+        subprocess.Popen(command, shell = True)
         
-    def reset_runtime(self):
-        
-        if self._data_override:
-            self._runtime_values = {}
-            self._data_override._put = Put()
-        else:
-            self.runtime_values = {}
-            self._put = Put()
-        
- 
-class Put(dict):
-    """
-    keeps data between code runs
-    """
-    
-    def __init__(self):
-        pass 
-    def __getattribute__(self, attr):
-        
-        value = object.__getattribute__(self, attr)
-        
-        util.show('Accessed - put.%s' % attr)
-        
-        return value
-    
-    def __setitem__(self, key, value):
-        
-        exec('self.%s = value' % key)
-        self.__dict__[key] = value
-    
-    def set(self, name, value):
-        
-        exec('self.%s = %s' % (name, value))
-        
-    def get_attribute_names(self):
-        
-        return list(self.attribute_names.keys())
  
 def get_default_directory():
     """
@@ -3313,7 +3059,7 @@ def copy(source_file_or_folder, target_file_or_folder, description = ''):
         util.warning('Error copying %s   to    %s' % (source_file_or_folder, target_file_or_folder))
         return
     
-    if copied_path:
+    if copied_path > -1:
         
         util.show('Finished copying %s from %s to %s' % (description, source_file_or_folder, target_file_or_folder))
         version = util_file.VersionFile(copied_path)
@@ -3483,27 +3229,7 @@ def copy_process_data(source_process, target_process, data_name, replace = False
     
     data_type = source_process.get_data_type(data_name)
     
-    is_folder = False
-    if not data_type:
-        is_folder = True
-    
     data_folder_path = None
-    path = source_process.get_data_path()
-    
-    if is_folder:
-        
-        util_file.create_dir(data_name, path)
-        source_process.set_data_parent_folder(data_name)
-        target_process.set_data_parent_folder(data_name)
-        sub_folders = source_process.get_data_folders()
-        
-        for sub_data_folder in sub_folders:
-            copy_process_data(source_process, target_process, sub_data_folder, replace = False, sub_folder = None)
-        source_process.set_data_parent_folder(None)
-        target_process.set_data_parent_folder(None) 
-        
-        return 
-    
     
     if not target_process.is_process():
         util.warning('Could not copy data, %s is not a vetala process.' % target_process)
@@ -3525,17 +3251,15 @@ def copy_process_data(source_process, target_process, data_name, replace = False
     if not target_process.is_data_folder(data_name, sub_folder):
         
         data_folder_path = target_process.create_data(data_name, data_type, sub_folder)
-    
-    instance = None
+        
+            
+    path = source_process.get_data_path()
+    data_folder = data.DataFolder(data_name, path)
 
-    if not is_folder:
-        
-        data_folder = data.DataFolder(data_name, path)
-        
-        instance = data_folder.get_folder_data_instance()
-        if not instance:
-            util.warning('Could not get data folder instances for: %s' % data_name)
-            return
+    instance = data_folder.get_folder_data_instance()
+    if not instance:
+        util.warning('Could not get data folder instances for: %s' % data_name)
+        return
 
     filepath = instance.get_file_direct(sub_folder)
     
@@ -3559,6 +3283,7 @@ def copy_process_data(source_process, target_process, data_name, replace = False
     
     if not sub_folder:
         sub_folders  = source_process.get_data_sub_folder_names(data_name)
+        
         for sub_folder in sub_folders:
             copy_process_data(source_process, target_process, data_name, replace, sub_folder)  
 
@@ -3703,7 +3428,7 @@ def initialize_project_settings(project_directory, settings_inst = None):
     if not project_settings_dict:
         project_settings_dict = settings_inst.get('project settings')
         
-    if not project_directory in project_settings_dict:
+    if not project_settings_dict.has_key(project_directory):
         project_settings_dict[project_directory] = {}
         settings_inst.set('project settings', project_settings_dict)
     
@@ -3722,10 +3447,10 @@ def get_project_setting(name, project_directory, settings_inst = None):
     value = None
 
     project_settings_dict = settings_inst.get('project settings')
-    if not project_directory in project_settings_dict:
+    if not project_settings_dict.has_key(project_directory):
         return
     
-    if name in project_settings_dict[project_directory]:
+    if project_settings_dict[project_directory].has_key(name):
         value = project_settings_dict[project_directory][name]
     
     return value
@@ -3744,7 +3469,7 @@ def set_project_setting(name, value, project_directory,  settings_inst = None):
     
     project_settings_dict = settings_inst.get('project settings')
     
-    if not project_directory in project_settings_dict:
+    if not project_settings_dict.has_key(project_directory):
         return
     
     project_settings_dict[project_directory][name] = value
@@ -3816,66 +3541,13 @@ def get_process_builtins(process):
     
     return builtins
 
-def reset_process_builtins(process, custom_builtins = {}):
-    
-    if not custom_builtins:
-        custom_builtins = {}
-        
+def reset_process_builtins(process):
     builtins = get_process_builtins(process)
-    custom_builtins.update(builtins)
     
     util.reset_code_builtins(builtins)
     
-def setup_process_builtins(process, custom_builtins = {}):
-    if not custom_builtins:
-        custom_builtins = {}
-    
+def setup_process_builtins(process):
     builtins = get_process_builtins(process)
     
-    custom_builtins.update(builtins)
+    util.setup_code_builtins(builtins)
     
-    util.setup_code_builtins(custom_builtins)
-    
-def run_deadline(process_directory, name, parent_jobs = [], batch_name = None):
-    deadline_command = util_file.get_deadline_command_from_settings()
-    
-    if not deadline_command:
-        return
-    
-    process_inst = Process()
-    process_inst.set_directory(process_directory)
-    
-    data_path = process_inst.get_data_path(in_folder = False)
-    
-    locator = cmds.spaceLocator()
-    maya_filename = util_file.join_path(data_path, 'deadline.ma')
-    if util_file.is_file_in_dir('deadline.ma', data_path):
-        util_file.delete_file('deadline.ma', data_path)
-    cmds.file( maya_filename, type='mayaAscii', exportSelected=True )
-    cmds.delete(locator)
-    
-    settings = util_file.get_vetala_settings_inst()
-    pool = settings.get('deadline_pool')
-    group = settings.get('deadline_group')
-    
-    department = settings.get('deadline_department')
-    
-    from ..render_farm import util_deadline
-    
-    job = util_deadline.MayaJob()
-    
-    if batch_name:
-        job.set_job_setting('BatchName', batch_name)
-    
-    if parent_jobs:
-        job.set_parent_jobs(parent_jobs)
-    
-    job.set_task_info(pool, group, 100)
-    job.set_task_description('Vetala Process: %s' % name, department, 'Testing')
-    
-    job.set_deadline_path(deadline_command)
-    job.set_output_path(data_path)
-    job.set_scene_file_path(maya_filename)
-    job_id = job.submit()
-    
-    return job_id

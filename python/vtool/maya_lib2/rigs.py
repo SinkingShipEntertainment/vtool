@@ -1,5 +1,3 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
 import string
 
 from vtool import util
@@ -318,7 +316,7 @@ class Rig(object):
             if name:
                 filtered_name_list.append(str(name))
         
-        name = '_'.join(filtered_name_list)
+        name = string.join(filtered_name_list, '_')
         
         return name
     

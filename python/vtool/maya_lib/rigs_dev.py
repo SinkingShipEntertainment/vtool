@@ -1,20 +1,19 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import vtool.util
 
 if vtool.util.is_in_maya():
     import maya.cmds as cmds
     
-from . import core
-from . import attr
-from . import space
-from . import anim
-from . import curve
-from . import geo
-from . import deform
-from . import rigs
-from . import rigs_util
+import core
+import attr
+import space
+import anim
+import curve
+import geo
+import deform
+import rigs
+import rigs_util
 
     
 class CurveTweakRig(rigs.CurveRig):
@@ -2018,8 +2017,7 @@ class EyeLidSphereRig2(rigs.BufferRig):
         self.surface = cmds.sphere( ch = False, o = True, po = False, ax = [0, 1, 0], radius = self.radius, nsp = 4, n = 'surface_%s' % core.inc_name(self._get_name()) )[0]
         
         space.MatchSpace(self.buffer_joints[0], self.surface).translation()
-        core.refresh()
-        
+        cmds.refresh()
         cmds.parent(self.surface, self.top_group, r = True)
         
         
@@ -4135,8 +4133,8 @@ class BackLeg(rigs.BufferRig):
         xform_ik_handle = space.create_xform_group(self.ik_handle)
 
         cmds.parent(xform_ik_handle, self.btm_offset) 
-        core.refresh()
-        
+
+        cmds.refresh()
 
     def set_pole_offset(self, offset_value):
         self.pole_offset = offset_value
@@ -4469,8 +4467,8 @@ class FrontLeg(rigs.BufferRig):
         xform_ik_handle = space.create_xform_group(self.ik_handle)
 
         cmds.parent(xform_ik_handle, self.btm_offset) 
-        core.refresh()
-        
+
+        cmds.refresh()
 
     def create(self):
         super(FrontLeg, self).create()
@@ -5254,8 +5252,8 @@ class BackLeg2(rigs.BufferRig):
         #last
         space.create_follow_group(self.btm_offset, xform_ik_handle)
         #cmds.parent(xform_ik_handle, self.btm_offset) 
-        core.refresh()
-        
+
+        cmds.refresh()
 
     def _setup_stretch(self):
         

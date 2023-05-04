@@ -1,28 +1,28 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import re
+import string
 import traceback
 
-from .. import util, util_math
-from .. import logger
-from . import api
+import vtool.util
+import api
+from vtool import util_math
 
+from vtool import logger
 log = logger.get_logger(__name__) 
 
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
     import maya.mel as mel
     import maya.api.OpenMaya as om
     import maya.api.OpenMayaAnim as omAnim
     
     
-from . import core
-from . import attr
-from . import space
-from . import geo
-from . import anim
+import core
+import attr
+import space
+import geo
+import anim
 
 def get_object(name):
     
@@ -99,7 +99,7 @@ class SkinCluster(object):
         
     def set_influence_weights(self, influence, weight, vertex_indices):
         
-        vertex_indices = util.convert_to_sequence(vertex_indices)
+        vertex_indices = vtool.util.convert_to_sequence(vertex_indices)
         
         index = self.get_influence_index(influence)
         
@@ -141,14 +141,21 @@ class XformTransfer(object):
     def _wrap_particles(self):
         if self.particles and self.source_mesh:
             
-            create_wrap(self.source_mesh, self.particles)
+            cmds.select([self.particles,self.source_mesh],replace = True)
+            mel.eval('source performCreateWrap.mel; performCreateWrap 0;')
             
-                
+            wrap = find_deformer_by_type(self.particles, 'wrap')
+            
+            cmds.setAttr('%s.exclusiveBind' % wrap, 0)
+            cmds.setAttr('%s.autoWeightThreshold' % wrap, 0)
+            cmds.setAttr('%s.maxDistance' % wrap, 0)
+            cmds.setAttr('%s.falloffMode' % wrap, 0)
+    
     def _blend_to_target(self):
         cmds.blendShape(self.target_mesh, self.source_mesh, weight = [0,1], origin = 'world')        
             
     def _move_to_target(self):
-        for inc in range(0, len(self.scope)):
+        for inc in xrange(0, len(self.scope)):
             position = cmds.pointPosition('%s.pt[%s]' % (self.particles,inc))
             transform = self.scope[inc]
             
@@ -306,12 +313,12 @@ class ClusterSurface(ClusterObject):
             p1 = cmds.xform('%s.cv[0][0]' % self.geometry, q = True, ws = True, t = True)
             p2 = cmds.xform('%s.cv%s' % (self.geometry, index3), q = True, ws = True, t = True)
             
-            start_position = util.get_midpoint(p1, p2)
+            start_position = vtool.util.get_midpoint(p1, p2)
             
             p1 = cmds.xform('%s.cv%s' % (self.geometry, index4), q = True, ws = True, t = True)
             p2 = cmds.xform('%s.cv%s' % (self.geometry, index5), q = True, ws = True, t = True)
             
-            end_position = util.get_midpoint(p1, p2)
+            end_position = vtool.util.get_midpoint(p1, p2)
         
         cluster, handle = self._create_cluster(start_cvs)
         
@@ -390,7 +397,7 @@ class ClusterSurface(ClusterObject):
             cv_count = len(self.cvs[2:self.cv_count])
             start_inc = 2
             
-        for inc in range(start_inc, cv_count):
+        for inc in xrange(start_inc, cv_count):
             
             if self.maya_type == 'nurbsCurve':
                 cv = '%s.cv[%s]' % (self.geometry, inc)
@@ -459,72 +466,26 @@ class ClusterCurve(ClusterSurface):
     """
     Convenience for clustering a curve. 
     """
-    def __init__(self, geometry, name):
-        super(ClusterCurve, self).__init__(geometry, name)
-        
-        self._other_curve = None
-        
-        self._all_geo = [self.geometry]
-    
-    def _get_cvs(self, cv_string):
-        cvs = []
-        for geo in self._all_geo:
-            cvs.append( (geo + cv_string) )
-        
-        return cvs
-    
-    def _get_all_cvs(self):
-        
-        cvs = []
-        
-        for geo in self._all_geo:
-            
-            
-            
-            cvs.append(cmds.ls('%s.cv[*]' % geo, flatten = True))
-            
-        organized_cvs = []
-        
-        if len(cvs) == 2:
-            for inc in range(0, len(cvs[0])):
-                organized_cvs.append( [cvs[0][inc], cvs[1][inc]] )
-        else:
-            organized_cvs = cvs[0]
-        return organized_cvs
-    
-    def _get_position(self, cv_string):
-        
-        cvs = self._get_cvs(cv_string)
-        if len(cvs) == 1:
-            return cmds.xform(cvs[0], q = True, ws = True, t = True)
-        
-        if len(cvs) == 2:
-            positions = []
-            for cv in cvs:
-                positions.append(cmds.xform(cv, q = True, ws = True, t = True))
-            
-            return util.get_midpoint(positions[0], positions[1])
-    
     def _create_start_and_end_clusters(self):
-        
-        cluster, handle = self._create_cluster(self._get_cvs('.cv[0:1]'))
+        cluster, handle = self._create_cluster('%s.cv[0:1]' % self.geometry)
         
         self.clusters.append(cluster)
         self.handles.append(handle)
         
-        position = self._get_position('.cv[0]')
+        position = cmds.xform('%s.cv[0]' % self.geometry, q = True, ws = True, t = True)
         cmds.xform(handle, ws = True, rp = position, sp = position)
         
-        last_cluster, last_handle = self._create_cluster(self._get_cvs('.cv[%s:%s]' % (self.cv_count-2, self.cv_count-1) ))
+        last_cluster, last_handle = self._create_cluster('%s.cv[%s:%s]' % (self.geometry,self.cv_count-2, self.cv_count-1) )
         
-        position = self._get_position('.cv[%s]' % (self.cv_count-1))
+        position = cmds.xform('%s.cv[%s]' % (self.geometry,self.cv_count-1), q = True, ws = True, t = True)
         cmds.xform(last_handle, ws = True, rp = position, sp = position)
         
         return last_cluster, last_handle
         
     def _create(self):
         
-        self.cvs = self._get_all_cvs()
+        
+        self.cvs = cmds.ls('%s.cv[*]' % self.geometry, flatten = True)
         
         self.cv_count = len(self.cvs)
         
@@ -538,8 +499,8 @@ class ClusterCurve(ClusterSurface):
             cv_count = len(self.cvs[2:self.cv_count])
             start_inc = 2
             
-        for inc in range(start_inc, cv_count):
-            cluster, handle = self._create_cluster( self.cvs[inc] )
+        for inc in xrange(start_inc, cv_count):
+            cluster, handle = self._create_cluster( '%s.cv[%s]' % (self.geometry, inc) )
             
             self.clusters.append(cluster)
             self.handles.append(handle)
@@ -555,11 +516,7 @@ class ClusterCurve(ClusterSurface):
         Not available on curves.
         """
         
-        util.warning('Can not set cluster u, there is only one direction for spans on a curve. To many teenage girls there was only One Direction for their musical tastes.')
-
-    def set_other_curve(self, curve_name):
-        self._all_geo.append(curve_name)
-         
+        vtool.util.warning('Can not set cluster u, there is only one direction for spans on a curve. To many teenage girls there was only One Direction for their musical tastes.')
 
 class SkinJointObject(object):
     """
@@ -578,9 +535,9 @@ class SkinJointObject(object):
     def _create_joint(self, cvs):
         joint =  create_joint_at_points(cvs, self.name)
         
-        cvs = util.convert_to_sequence(cvs)
+        cvs = vtool.util.convert_to_sequence(cvs)
         
-        if not joint in self.cv_dict:
+        if not self.cv_dict.has_key(joint):
             self.cv_dict[joint] = []
             
         self.cv_dict[joint].append(cvs)
@@ -664,23 +621,23 @@ class SkinJointSurface(SkinJointObject):
             p1 = cmds.xform('%s.cv[0][0]' % self.geometry, q = True, ws = True, t = True)
             p2 = cmds.xform('%s.cv%s' % (self.geometry, index3), q = True, ws = True, t = True)
             
-            start_position = util.get_midpoint(p1, p2)
+            start_position = vtool.util.get_midpoint(p1, p2)
             
             p1 = cmds.xform('%s.cv%s' % (self.geometry, index4), q = True, ws = True, t = True)
             p2 = cmds.xform('%s.cv%s' % (self.geometry, index5), q = True, ws = True, t = True)
             
-            end_position = util.get_midpoint(p1, p2)
+            end_position = vtool.util.get_midpoint(p1, p2)
         
         start_joint = self._create_joint(start_cvs)
         
         self.joints.append(start_joint)
         
-        if self.first_joint_pivot_at_start:
+        if self.first_cluster_pivot_at_start:
             cmds.xform(start_joint, ws = True, rp = start_position, sp = start_position)
         
         end_joint = self._create_joint(end_cvs)
         
-        if self.last_joint_pivot_at_end:
+        if self.last_cluster_pivot_at_end:
             cmds.xform(end_joint, ws = True, rp = end_position, sp = end_position)
             
         return end_joint
@@ -761,7 +718,7 @@ class SkinJointSurface(SkinJointObject):
             cv_count = len(self.cvs[2:self.cv_count])
             start_inc = 2
             
-        for inc in range(start_inc, cv_count):
+        for inc in xrange(start_inc, cv_count):
             
             if self.maya_type == 'nurbsCurve':
                 cv = '%s.cv[%s]' % (self.geometry, inc)
@@ -862,7 +819,7 @@ class SkinJointCurve(SkinJointSurface):
             cv_count = len(self.cvs[2:self.cv_count])
             start_inc = 2
             
-        for inc in range(start_inc, cv_count):
+        for inc in xrange(start_inc, cv_count):
             joint = self._create_joint('%s.cv[%s]' % (self.geometry, inc))
             
             self.joints.append(joint)
@@ -879,7 +836,7 @@ class SkinJointCurve(SkinJointSurface):
         Not available on curves.
         """
         
-        util.warning('Can not set joint u, there is only one direction for spans on a curve. To many teenage girls there was only One Direction for their musical tastes.')
+        vtool.util.warning('Can not set joint u, there is only one direction for spans on a curve. To many teenage girls there was only One Direction for their musical tastes.')
 
 
 
@@ -906,7 +863,7 @@ class SplitMeshTarget(object):
     """
     def __init__(self, target_mesh):
         
-        self.target_mesh = util.convert_to_sequence(target_mesh)
+        self.target_mesh = vtool.util.convert_to_sequence(target_mesh)
         
         self.weighted_mesh = None
         self.base_mesh = None
@@ -918,62 +875,64 @@ class SplitMeshTarget(object):
         
     def _get_center_fade_weights(self, mesh, fade_distance, positive):
         
-        util.show('Computing center fade weights...')
+        vtool.util.show('Computing center fade weights...')
         
-        #verts = cmds.ls('%s.vtx[*]' % mesh, flatten = True)
-        
-        verts = cmds.xform('%s.vtx[*]' % mesh, q = True, ws = True, t = True)
-        
+        verts = cmds.ls('%s.vtx[*]' % mesh, flatten = True)
         
         values = []
         
         fade_distance = fade_distance/2.0
         inc = 0
-        for inc in range(0, len(verts), 3):
+        for vert in verts:
             
-            vert_position = verts[inc:inc+3]
-            inc += 1
             if fade_distance == 0:
                 values.append(1.0)
                 continue
             
+            
             if fade_distance != 0:
+                vert_position = cmds.xform(vert, q = True, ws = True, t = True)
                 
-                #fade_distance = float(fade_distance)
+                fade_distance = float(fade_distance)
                 
                 value = vert_position[0]/fade_distance
-                value = max(min(value, 1), -1)
-
+                
+                if value > 1:
+                    value = 1
+                if value < -1:
+                    value = -1
+                
                 if positive:
                     
                     if value >= 0:
-                        value = util.set_percent_range(value, 0.5, 1)
+                        value = vtool.util.set_percent_range(value, 0.5, 1)
                     
                     if value < 0:
                         value = abs(value)
-                        value = util.set_percent_range(value, 0.5, 0)
+                        value = vtool.util.set_percent_range(value, 0.5, 0)
                         
                 if not positive:
 
                     if value >= 0:
-                        value = util.set_percent_range(value, 0.5, 0)
+                        value = vtool.util.set_percent_range(value, 0.5, 0)
                     
                     if value < 0:
                         value = abs(value)
-                        value = util.set_percent_range(value, 0.5, 1)
+                        value = vtool.util.set_percent_range(value, 0.5, 1)
                         
+            inc += 1
             
-            
-            #if value < 1 and value > 0 and value:
-            #    value = util_math.easeInOutExpo(value) 
+            if value < 1 and value > 0 and value:
+                value = util_math.easeInOutExpo(value) 
             
             values.append(value)
+            
         
         return values
     
     def _get_joint_weights(self, joint, weighted_mesh = None):
         
-        util.show('Computing joint weights...')
+        vtool.util.show('Computing joint weights...')
         
         if not weighted_mesh:
             weighted_mesh = self.weighted_mesh
@@ -986,7 +945,7 @@ class SplitMeshTarget(object):
         weights = get_skin_influence_weights(joint, skin_cluster)
         
         if weights == None:
-            util.warning('Joint %s is not in skinCluster %s' % (joint, skin_cluster))
+            vtool.util.warning('Joint %s is not in skinCluster %s' % (joint, skin_cluster))
             return []
         
         return weights
@@ -1021,7 +980,7 @@ class SplitMeshTarget(object):
                 if not name in self.skip_target_rename:
                     sub_name = name
                     
-                    last_number = util.get_trailing_number(sub_name, as_string = True, number_count = 2)
+                    last_number = vtool.util.get_trailing_number(sub_name, as_string = True, number_count = 2)
                     
                     if last_number:
                         sub_name = sub_name[:-2]
@@ -1056,7 +1015,7 @@ class SplitMeshTarget(object):
                             
                     new_names.append(sub_new_name)
                     
-            new_name = '_'.join(new_names)
+            new_name = string.join(new_names, '_')
         
         if not split_name_option:
             
@@ -1064,7 +1023,7 @@ class SplitMeshTarget(object):
             
             negative = False
             
-            last_number = util.get_trailing_number(target_name, as_string = True, number_count = 2)
+            last_number = vtool.util.get_trailing_number(target_name, as_string = True, number_count = 2)
             
             if last_number:
                 target_name = target_name[:-2]
@@ -1107,7 +1066,7 @@ class SplitMeshTarget(object):
     
     def _weight_target(self, base_target, target, weights):
         
-        from . import blendshape
+        import blendshape
         
         blendshape_node = cmds.blendShape(base_target, target, w = [0,1])[0]
         blend = blendshape.BlendShape(blendshape_node)
@@ -1197,19 +1156,19 @@ class SplitMeshTarget(object):
     def split_target(self,target):
         
         if not core.is_unique(target):
-            util.warning('%s target is not unique. Target not split.' % target)
+            vtool.util.warning('%s target is not unique. Target not split.' % target)
             return []
         
         if not self.base_mesh or not cmds.objExists(self.base_mesh):
-            util.warning('%s base mesh does not exist to split off of.' % self.base_mesh)
+            vtool.util.warning('%s base mesh does not exist to split off of.' % self.base_mesh)
             return []
         
         if not target or not cmds.objExists(target):
-            util.warning('%s target does not exist for splitting' % target)
+            vtool.util.warning('%s target does not exist for splitting' % target)
             return []
         
         if self.weighted_mesh and not cmds.objExists(self.weighted_mesh):
-            util.warning('Weight mesh specified. %s weight mesh does not exist for splitting' % self.weighted_mesh)
+            vtool.util.warning('Weight mesh specified. %s weight mesh does not exist for splitting' % self.weighted_mesh)
             return []
 
         parent = cmds.listRelatives( target, p = True, f = True)
@@ -1218,7 +1177,7 @@ class SplitMeshTarget(object):
 
         targets = []
         
-        util.show('Splitting target: %s' % target)
+        vtool.util.show('Splitting target: %s' % target)
         
         base_meshes = self.base_meshes
         base_mesh_count = self.base_mesh_count
@@ -1242,18 +1201,18 @@ class SplitMeshTarget(object):
             center_fade, positive_negative = part[6]
             
             if center_fade == None and not self.weighted_mesh:
-                util.warning('Splitting with joints specified, but no weighted mesh specified.')
+                vtool.util.warning('Splitting with joints specified, but no weighted mesh specified.')
                 continue
             
             new_target_meshes = core.get_shapes_in_hierarchy(new_target, 'mesh', return_parent = True)
             
             if not base_mesh_count == len(target_meshes):
-                util.warning('Searching children, but children of base mesh and children of target mesh have different count.')
+                vtool.util.warning('Searching children, but children of base mesh and children of target mesh have different count.')
                 continue
             
             if center_fade == None:
                 if not base_mesh_count == len(weight_meshes):
-                    util.warning('Searching children, but children of base mesh and children of weight mesh have different count.')
+                    vtool.util.warning('Searching children, but children of base mesh and children of weight mesh have different count.')
                     continue
             
             was_split = False
@@ -1269,9 +1228,9 @@ class SplitMeshTarget(object):
                     split_type = joint
                 
                 
-                if not base_mesh in self.weights_dict or not split_type in self.weights_dict[base_mesh]:
+                if not self.weights_dict.has_key(base_mesh) or not self.weights_dict[base_mesh].has_key(split_type):
                         
-                    if not base_mesh in self.weights_dict:
+                    if not self.weights_dict.has_key(base_mesh):
                         self.weights_dict[base_mesh] = {}
                     
                     if center_fade != None:    
@@ -1296,7 +1255,7 @@ class SplitMeshTarget(object):
                 new_target_mesh = new_target_meshes[inc]
                     
                 if not weights:
-                    util.warning('No weights found! Could not extract target on %s' % target_mesh)
+                    vtool.util.warning('No weights found! Could not extract target on %s' % target_mesh)
                     continue
                         
                 if weights:
@@ -1319,18 +1278,18 @@ class SplitMeshTarget(object):
                 
                 targets.append(new_target)
                 
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
             
         if not len(targets):
-            util.warning('No targets created when splitting.')
+            vtool.util.warning('No targets created when splitting.')
         
         
         
         return targets
     
     @core.undo_off
-    def create(self, return_dict = False):
+    def create(self):
         """
         Create the splits.
         
@@ -1346,9 +1305,6 @@ class SplitMeshTarget(object):
         
         targets = []
         
-        if return_dict:
-            targets = {}
-        
         self.base_meshes = core.get_shapes_in_hierarchy(self.base_mesh, 'mesh', return_parent = True)
         self.base_mesh_count = len(self.base_meshes)
         
@@ -1362,12 +1318,11 @@ class SplitMeshTarget(object):
             
             bar.status('Splitting target: %s, %s of %s' % (target, inc, len(self.target_mesh)))
             new_targets = self.split_target(target)
+        
+            
             
             if new_targets:
-                if type(targets) == list:
-                    targets += new_targets
-                if type(targets) == dict:
-                    targets[target] = new_targets
+                targets += new_targets
             
             if bar.break_signaled():
                 break
@@ -1441,7 +1396,6 @@ class CopyDeformation(object):
         self._transfer_skin = True
         self._transfer_blends = True
         self._delete_history = True
-        self._uv_space = False
     
     def set_use_delta_mush(self, bool_value):
         self._use_delta_mush = bool_value
@@ -1455,9 +1409,6 @@ class CopyDeformation(object):
     def set_delete_history_first(self, bool_value):
         self._delete_history = bool_value
     
-    def set_work_in_uv_space(self, bool_value):
-        self._uv_space = bool_value
-    
     def run(self):
         
         
@@ -1465,19 +1416,19 @@ class CopyDeformation(object):
             cmds.delete(self._target_mesh, ch = True)
         
         if self._transfer_skin:
-            util.show('Copying SkinCluster from %s to %s' % (self._source_mesh, self._target_mesh))
-            skin_mesh_from_mesh(self._source_mesh, self._target_mesh, uv_space=self._uv_space)
+            vtool.util.show('Copying SkinCluster from %s to %s' % (self._source_mesh, self._target_mesh))
+            skin_mesh_from_mesh(self._source_mesh, self._target_mesh)
         
         if self._transfer_blends:
-            util.show('Copying Blendshape from %s to %s' % (self._source_mesh, self._target_mesh))
+            vtool.util.show('Copying Blendshape from %s to %s' % (self._source_mesh, self._target_mesh))
             blends = find_deformer_by_type(self._source_mesh, 'blendShape', return_all = True)
             
             if blends:
             
                 for blend in blends:
                     
-                    from . import blendshape
-                    blendshape.transfer_blendshape_targets(blend, self._target_mesh, wrap_mesh = True, use_delta_mush = self._use_delta_mush, use_uv = self._uv_space)
+                    import blendshape
+                    blendshape.transfer_blendshape_targets(blend, self._target_mesh, wrap_mesh = True, use_delta_mush = self._use_delta_mush)
         
 
 class TransferWeight(object):
@@ -1509,7 +1460,7 @@ class TransferWeight(object):
         self._smooth_verts_iterations = 3
             
     def _get_vertices(self, mesh):
-        if util.is_str(mesh):
+        if type(mesh) == str or type(mesh) == unicode:        
             self.vertices = cmds.ls('%s.vtx[*]' % self.mesh, flatten = True)
         
         if type(mesh) == list:
@@ -1536,18 +1487,18 @@ class TransferWeight(object):
         for joint in joints:
             
             if not  cmds.objExists(joint):
-                util.warning('Could not add joint to skin cluster. %s does not exist.' % joint)
+                vtool.util.warning('Could not add joint to skin cluster. %s does not exist.' % joint)
                 continue
             
             if not joint in influences:
                 try:
                     cmds.skinCluster(skin, e = True, ai = joint, wt = 0.0, nw = 1)
                 except:
-                    util.warning('Influence already in skin cluster %s' % skin)
+                    vtool.util.warning('Influence already in skin cluster %s' % skin)
         
     def set_optimize_mesh(self, percent=50):
         #self.mesh
-        #util.show( 'Optimize is temporarily turned off in this version of Vetala' )
+        #vtool.util.show( 'Optimize is temporarily turned off in this version of Vetala' )
         #return
         
         self._optimize_mesh = cmds.duplicate(self.mesh)[0]
@@ -1609,23 +1560,23 @@ class TransferWeight(object):
             percent (float): 0-1 value.  If value is 0.5, only 50% of source_joints weighting will be added to destination_joints weighting.
         """
         
-        source_joints = util.convert_to_sequence(source_joints)
-        destination_joints = util.convert_to_sequence(destination_joints)
+        source_joints = vtool.util.convert_to_sequence(source_joints)
+        destination_joints = vtool.util.convert_to_sequence(destination_joints)
         
-        if util.get_env('VETALA_RUN') == 'True':
-            if util.get_env('VETALA_STOP') == 'True':
+        if vtool.util.get_env('VETALA_RUN') == 'True':
+            if vtool.util.get_env('VETALA_STOP') == 'True':
                 return
         
         if not self.skin_cluster:
-            util.show('No skinCluster found on %s. Could not transfer.' % self.mesh)
+            vtool.util.show('No skinCluster found on %s. Could not transfer.' % self.mesh)
             return
         
         if not destination_joints:
-            util.warning('Destination joints do not exist.')
+            vtool.util.warning('Destination joints do not exist.')
             return
             
         if not source_joints:
-            util.warning('Source joints do not exist.')
+            vtool.util.warning('Source joints do not exist.')
             return
         
         if not source_mesh:
@@ -1638,7 +1589,7 @@ class TransferWeight(object):
             verts_source_mesh = cmds.ls('%s.vtx[*]' % source_mesh, flatten = True)    
             
             #if len(verts_mesh) != len(verts_source_mesh):
-            #    util.warning('%s and %s have different vert counts. Can not transfer weights.' % (self.mesh, source_mesh))
+            #    vtool.util.warning('%s and %s have different vert counts. Can not transfer weights.' % (self.mesh, source_mesh))
             #    return
         
         source_skin_cluster = self._get_skin_cluster(source_mesh)
@@ -1659,9 +1610,9 @@ class TransferWeight(object):
             
             for vert_index in range(0, len(verts_source_mesh)):
                 
-                int_vert_index = int(util.get_last_number(verts_source_mesh[vert_index]))
+                int_vert_index = int(vtool.util.get_last_number(verts_source_mesh[vert_index]))
                 
-                if not influence_index in source_value_map:
+                if not source_value_map.has_key(influence_index):
                     continue
                 
                 value = source_value_map[influence_index][int_vert_index]
@@ -1672,10 +1623,13 @@ class TransferWeight(object):
         
         self._add_joints_to_skin(source_joints)
         
+        lock_joint_weights(self.skin_cluster, destination_joints)
+        #unlock_joint_weights(self.skin_cluster)
+        
         vert_count = len(weighted_verts)
         
         if not vert_count:
-            util.warning('Found no weights for specified influences on %s.' % source_skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % source_skin_cluster)
             return
         
         bar = core.ProgressBar('transfer weight', vert_count)
@@ -1684,43 +1638,26 @@ class TransferWeight(object):
         
         
         weight_array = om.MDoubleArray()
+        weights = []
         
         weighted_verts.sort()
         
-        source_influence_remap = {}
+        influence_remap = {}
+        
         new_influences = []
+        
         for source_index in source_value_map:
-            if not source_index in joint_map:
+            if not joint_map.has_key(source_index):
                 continue
             index = get_relative_index_at_skin_influence(joint_map[source_index], self.skin_cluster)
+            #index = get_index_at_skin_influence(joint_map[source_index], self.skin_cluster)
             if index != None:
                 new_influences.append(index)
-                source_influence_remap[index] = source_index
-        source_influences = new_influences
+                influence_remap[index] = source_index
         
-        dest_influence_remap = {}
-        new_dest_influences = []
-        for dest_index in destination_value_map:
-            if not dest_index in destination_joint_map:
-                continue
-            index = get_relative_index_at_skin_influence(destination_joint_map[dest_index], self.skin_cluster)
-            if index != None:
-                new_dest_influences.append(index)
-                dest_influence_remap[index] = dest_index
-        dest_influences = new_dest_influences
+        influences = new_influences
         
-        all_influences = source_influences + dest_influences
-        
-        unlock_joint_weights(self.skin_cluster)
-        indices = get_skin_influence_indices(self.skin_cluster)
-        locks = []
-        for influence_index in indices:
-            if influence_index in all_influences:
-                lock_influence = get_skin_influence_at_index(influence_index, self.skin_cluster)
-                locks.append(lock_influence)
-        lock_joint_weights(self.skin_cluster, locks)
-        
-        if not source_influences:
+        if not influences:
             return
         for vert_index in weighted_verts:
             
@@ -1731,17 +1668,14 @@ class TransferWeight(object):
                 if influence_index == None:
                     continue
                 
-                if influence_index in destination_value_map:
-                    try:
-                        destination_value += destination_value_map[influence_index][vert_index]
-                    except:
-                        pass
+                if destination_value_map.has_key(influence_index):
+                    destination_value += destination_value_map[influence_index][vert_index]
+                if not destination_value_map.has_key(influence_index):
+                    destination_value += 0.0
             
-            total_value_change = 0
-            
-            for influence_index in source_influences:
+            for influence_index in influences:
                 
-                remap_influence_index = source_influence_remap[influence_index]
+                remap_influence_index = influence_remap[influence_index]
                 
                 value = source_value_map[remap_influence_index][vert_index]
                 
@@ -1752,33 +1686,14 @@ class TransferWeight(object):
                 if value > 1:
                     value = 1
                 
-                total_value_change += value
-                
                 weight_array.append(value)
-            
-            if total_value_change > destination_value:
-                total_value_change = destination_value
-            
-            for dest_influence_index in dest_influences:
-                
-                remap_dest_influence_index = dest_influence_remap[dest_influence_index]
-                
-                try:
-                    old_value = destination_value_map[remap_dest_influence_index][vert_index]
-                except:
-                    old_value = 1
-                
-                if destination_value == 0:
-                    new_value = 0
-                else:
-                    new_value = (old_value * (destination_value-total_value_change)) / destination_value
-                weight_array.append(new_value)
+                weights.append(value)
             
             bar.inc()
             
             bar.status('transfer new weight: %s of %s' % (inc, vert_count))
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
                         
             if bar.break_signaled():
@@ -1787,12 +1702,12 @@ class TransferWeight(object):
             inc += 1
         
         components= api.get_components(weighted_verts)
-        
-        api.set_skin_weights(self.skin_cluster, weight_array, index = 0, components = components, influence_array=all_influences)
+
+        api.set_skin_weights(self.skin_cluster, weight_array, index = 0, components = components, influence_array=influences)
             
-        #cmds.skinPercent(self.skin_cluster, self.vertices, normalize = True) 
+        cmds.skinPercent(self.skin_cluster, self.vertices, normalize = True) 
         
-        util.show('Done: %s transfer joint to joint.' % self.mesh)
+        vtool.util.show('Done: %s transfer joint to joint.' % self.mesh)
         
         bar.end()
         
@@ -1818,23 +1733,23 @@ class TransferWeight(object):
         """
         accuracy = 0.00001
         
-        source_joints = util.convert_to_sequence(source_joints)
-        destination_joints = util.convert_to_sequence(destination_joints)
+        source_joints = vtool.util.convert_to_sequence(source_joints)
+        destination_joints = vtool.util.convert_to_sequence(destination_joints)
         
-        if util.get_env('VETALA_RUN') == 'True':
-            if util.get_env('VETALA_STOP') == 'True':
+        if vtool.util.get_env('VETALA_RUN') == 'True':
+            if vtool.util.get_env('VETALA_STOP') == 'True':
                 return
         
         if not self.skin_cluster:
-            util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
+            vtool.util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
             return
         
         if not destination_joints:
-            util.warning('Destination joints do not exist.')
+            vtool.util.warning('Destination joints do not exist.')
             return
             
         if not source_joints:
-            util.warning('Source joints do not exist.')
+            vtool.util.warning('Source joints do not exist.')
             return
         
         if not source_mesh:
@@ -1848,13 +1763,13 @@ class TransferWeight(object):
             source_mesh_length = len(verts_source_mesh)
             
             #if len(verts_mesh) != source_mesh_length:
-            #    util.warning('%s and %s have different vert counts. Cannot transfer weights.' % (self.mesh, source_mesh))
+            #    vtool.util.warning('%s and %s have different vert counts. Cannot transfer weights.' % (self.mesh, source_mesh))
             #    return
         
         source_skin_cluster = self._get_skin_cluster(source_mesh)
         
         if not source_skin_cluster:
-            util.warning('No skin cluster found on source: %s' % source_mesh)
+            vtool.util.warning('No skin cluster found on source: %s' % source_mesh)
             return
         
         source_value_map = get_skin_weights(source_skin_cluster)
@@ -1890,7 +1805,7 @@ class TransferWeight(object):
                     total_source_value[vert_index] += value
 
         if not found_one:
-            util.warning('Source mesh had no valid influences')
+            vtool.util.warning('Source mesh had no valid influences')
             return
         
         self._add_joints_to_skin(source_joints)
@@ -1898,7 +1813,7 @@ class TransferWeight(object):
         vert_count = len(total_source_value.keys())
         
         if not vert_count:
-            util.warning('Found no weights for specified influences on %s.' % source_skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % source_skin_cluster)
             return
         
         bar = core.ProgressBar('transfer weight', vert_count)
@@ -1976,7 +1891,7 @@ class TransferWeight(object):
             
             bar.status('transfer weight: %s of %s' % (inc, vert_count))
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
                         
             if bar.break_signaled():
@@ -1988,9 +1903,9 @@ class TransferWeight(object):
         cmds.skinPercent(self.skin_cluster, self.vertices, normalize = True) 
         
         if not found_one:
-            util.warning('Source mesh had no valid weight/joint associations for the given joints')
+            vtool.util.warning('Source mesh had no valid weight/joint associations for the given joints')
         
-        util.show('Done: %s transfer joint to joint.' % self.mesh)
+        vtool.util.show('Done: %s transfer joint to joint.' % self.mesh)
         
         
         
@@ -2017,30 +1932,30 @@ class TransferWeight(object):
             self.skin_cluster = self._get_skin_cluster(self._optimize_mesh)
             self._get_vertices(self.mesh)
         
-        if util.get_env('VETALA_RUN') == 'True':
-            if util.get_env('VETALA_STOP') == 'True':
+        if vtool.util.get_env('VETALA_RUN') == 'True':
+            if vtool.util.get_env('VETALA_STOP') == 'True':
                 return
         
         if not self.skin_cluster:
-            util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
+            vtool.util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
             return
         
-        joints = util.convert_to_sequence(joints)
+        joints = vtool.util.convert_to_sequence(joints)
         joints = core.remove_non_existent(joints)
         
-        new_joints = util.convert_to_sequence(new_joints)
+        new_joints = vtool.util.convert_to_sequence(new_joints)
         new_joints = core.remove_non_existent(new_joints)
         
         if not new_joints:
-            util.warning('Destination joints do not exist.')
+            vtool.util.warning('Destination joints do not exist.')
             return
             
         if not joints:
-            util.warning('Source joints do not exist.')
+            vtool.util.warning('Source joints do not exist.')
             return
         
         if not self.skin_cluster or not self.mesh:
-            util.warning('No skin cluster or mesh supplied.')
+            vtool.util.warning('No skin cluster or mesh supplied.')
             return
         
         lock_joint_weights(self.skin_cluster, joints + new_joints)
@@ -2056,7 +1971,7 @@ class TransferWeight(object):
         for joint in joints:
             
             if not cmds.objExists(joint):
-                util.warning('%s does not exist.' % joint)
+                vtool.util.warning('%s does not exist.' % joint)
                 continue
             
             index = get_index_at_skin_influence(joint,self.skin_cluster)
@@ -2064,7 +1979,7 @@ class TransferWeight(object):
             if index == None:
                 continue
             
-            if not index in value_map:
+            if not value_map.has_key(index):
                 continue
             
             influence_values[index] = value_map[index]
@@ -2073,7 +1988,7 @@ class TransferWeight(object):
             good_source_joints.append(joint)
             
         if not source_joint_weights:
-            util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
             return
             
         verts = self.vertices
@@ -2082,10 +1997,10 @@ class TransferWeight(object):
         weights = {}
         
         #organizing weights
-        for vert_index in range(0, len(verts)):
+        for vert_index in xrange(0, len(verts)):
             for influence_index in influence_index_order:
                 
-                int_vert_index = util.get_last_number(verts[vert_index])
+                int_vert_index = vtool.util.get_last_number(verts[vert_index])
                 
                 value = influence_values[influence_index][int_vert_index]
                 
@@ -2102,7 +2017,7 @@ class TransferWeight(object):
         #weighted_verts.sort()
         
         if not weighted_verts:
-            util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
             return
         
         bar = core.ProgressBar('transfer weight', len(weighted_verts))
@@ -2134,7 +2049,7 @@ class TransferWeight(object):
             distances = space.get_distances(new_joints, vert_name)
             
             if not distances:
-                util.warning('No distances found. Check your target joints.')
+                vtool.util.warning('No distances found. Check your target joints.')
                 bar.end()
                 return
             
@@ -2146,7 +2061,7 @@ class TransferWeight(object):
                 
                 distances_in_range = []
                 
-                quick = util.QuickSort(distances)
+                quick = vtool.util.QuickSort(distances)
                 sorted_distances = quick.run()
                 smallest_distance = sorted_distances[0]
                 
@@ -2156,7 +2071,7 @@ class TransferWeight(object):
                 
                 distances_away = {}
                 
-                for joint_index in range(0, new_joint_count):
+                for joint_index in xrange(0, new_joint_count):
                     
                     distance = distances[joint_index]
                     distance_away = distance - smallest_distance
@@ -2189,7 +2104,7 @@ class TransferWeight(object):
                     joint_weight[new_joints[distance_inc]] = weight
                     
                 for new_joint in new_joints:
-                    if not new_joint in joint_weight:
+                    if not joint_weight.has_key(new_joint):
                         joint_weight[new_joint] = None
             
             weight_value = weights[vert_index]
@@ -2198,7 +2113,7 @@ class TransferWeight(object):
             new_weights[vert_index] = {}
             
             if source_joint_weights:
-                for joint_index in range(0, joint_count):
+                for joint_index in xrange(0, joint_count):
                     
                     joint_id = influence_index_order[joint_index]
                     
@@ -2212,7 +2127,7 @@ class TransferWeight(object):
                     #cmds.setAttr('%s.weightList[%s].weights[%s]' % (self.skin_cluster, vert_index, joint_id), value)
             
             if not source_joint_weights:
-                util.warning('No weighting on source joints.')
+                vtool.util.warning('No weighting on source joints.')
                 
             for joint in joint_weight:
                 
@@ -2232,7 +2147,7 @@ class TransferWeight(object):
             bar.status('transfer weight from %s: %s of %s' % (joints, inc, len(weighted_verts)))
             #bar.status('transfer weight: %s of %s' % (inc, len(weighted_verts)))
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
             
             if bar.break_signaled():
@@ -2241,7 +2156,7 @@ class TransferWeight(object):
             inc += 1
 
         components= api.get_components(vert_ids)
-        influences = list(influences_dict.keys())
+        influences = influences_dict.keys()
         weight_array = om.MDoubleArray()
         new_influences  = []
         for influence in influences:
@@ -2259,7 +2174,7 @@ class TransferWeight(object):
         cmds.skinPercent(self.skin_cluster, self.vertices, normalize = True) 
         
         if farthest_distance:
-            util.show('Farthest vertex was %s' % round(farthest_distance, 3))
+            vtool.util.show('Farthest vertex was %s' % round(farthest_distance, 3))
         
         if self._optimize_mesh:
             cmds.skinCluster(self._original_mesh,  e = True, siv = joints)
@@ -2286,7 +2201,7 @@ class TransferWeight(object):
             smooth_skin_weights(verts, self._smooth_verts_iterations)
         
         bar.end()
-        util.show('Done: %s transfer %s to %s.' % (self.mesh, joints, new_joints))
+        vtool.util.show('Done: %s transfer %s to %s.' % (self.mesh, joints, new_joints))
         
     @core.undo_off  
     def transfer_exact_falloff_joints_to_new_joints(self, joints, new_joints, falloff = 1, power = 4, weight_percent_change = 1):
@@ -2307,27 +2222,27 @@ class TransferWeight(object):
             self.skin_cluster = self._get_skin_cluster(self._optimize_mesh)
             self._get_vertices(self.mesh)
             
-        if util.get_env('VETALA_RUN') == 'True':
-            if util.get_env('VETALA_STOP') == 'True':
+        if vtool.util.get_env('VETALA_RUN') == 'True':
+            if vtool.util.get_env('VETALA_STOP') == 'True':
                 return
         
         if not self.skin_cluster:
-            util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
+            vtool.util.warning('No skinCluster found on %s. Could not transfer.' % self.mesh)
             return
         
-        joints = util.convert_to_sequence(joints)
-        new_joints = util.convert_to_sequence(new_joints)
+        joints = vtool.util.convert_to_sequence(joints)
+        new_joints = vtool.util.convert_to_sequence(new_joints)
         
         if not new_joints:
-            util.warning('Destination joints do not exist.')
+            vtool.util.warning('Destination joints do not exist.')
             return
             
         if not joints:
-            util.warning('Source joints do not exist.')
+            vtool.util.warning('Source joints do not exist.')
             return
         
         if not self.skin_cluster or not self.mesh:
-            util.warning('No skin cluster or mesh supplied.')
+            vtool.util.warning('No skin cluster or mesh supplied.')
             return
         
         lock_joint_weights(self.skin_cluster, joints)
@@ -2342,7 +2257,7 @@ class TransferWeight(object):
         for joint in joints:
             
             if not cmds.objExists(joint):
-                util.warning('%s does not exist.' % joint)
+                vtool.util.warning('%s does not exist.' % joint)
                 continue
             
             index = get_index_at_skin_influence(joint,self.skin_cluster)
@@ -2350,7 +2265,7 @@ class TransferWeight(object):
             if index == None:
                 continue
             
-            if not index in value_map:
+            if not value_map.has_key(index):
                 continue
             
             influence_values[index] = value_map[index]
@@ -2359,7 +2274,7 @@ class TransferWeight(object):
             good_source_joints.append(joint)
             
         if not source_joint_weights:
-            util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
             return
             
         verts = self.vertices
@@ -2372,9 +2287,9 @@ class TransferWeight(object):
         #organizing weights
         for influence_index in influence_index_order:
             
-            for vert_index in range(0, len(verts)):
+            for vert_index in xrange(0, len(verts)):
                 
-                int_vert_index = util.get_last_number(verts[vert_index])
+                int_vert_index = vtool.util.get_last_number(verts[vert_index])
                 
                 value = influence_values[influence_index][int_vert_index]
                 
@@ -2389,7 +2304,7 @@ class TransferWeight(object):
                         weights[int_vert_index] = value
         
         if not weighted_verts:
-            util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
+            vtool.util.warning('Found no weights for specified influences on %s.' % self.skin_cluster)
             return
         
         bar = core.ProgressBar('transfer weight', len(weighted_verts))
@@ -2418,7 +2333,7 @@ class TransferWeight(object):
             distances = space.get_distances(new_joints, vert_name)
             
             if not distances:
-                util.warning('No distances found. Check your target joints.')
+                vtool.util.warning('No distances found. Check your target joints.')
                 bar.end()
                 return
             
@@ -2431,13 +2346,13 @@ class TransferWeight(object):
                 distances_in_range = []
                 
                 new_joint_ids = range(new_joint_count)
-                quick = util.QuickSort(distances)
+                quick = vtool.util.QuickSort(distances)
                 quick.set_follower_list(new_joint_ids)
                 sorted_distances, sorted_new_joint_ids = quick.run()
                 
                 distances_away = {}
                 
-                for joint_index in range(0, new_joint_count):
+                for joint_index in xrange(0, new_joint_count):
                     
                     distance = distances[joint_index]
                     
@@ -2483,7 +2398,7 @@ class TransferWeight(object):
             
             #remove weighting from source joints
             if source_joint_weights:
-                for joint_index in range(0, joint_count):
+                for joint_index in xrange(0, joint_count):
                     
                     joint_id = influence_index_order[joint_index]
                     
@@ -2503,7 +2418,7 @@ class TransferWeight(object):
                     #cmds.setAttr('%s.weightList[%s].weights[%s]' % (self.skin_cluster, vert_index, joint_id), value)
             
             if not source_joint_weights:
-                util.warning('No weighting on source joints.')
+                vtool.util.warning('No weighting on source joints.')
                 
             #do the weighting
             for joint in joint_weight:
@@ -2512,10 +2427,10 @@ class TransferWeight(object):
                 value = weight_value * joint_value * weight_percent_change
                 
                 
-                if joint in joint_ids:
+                if joint_ids.has_key(joint):
                     joint_index = joint_ids[joint]
                 else:
-                    util.warning('%s not used in new skin weights' % joint)
+                    vtool.util.warning('%s not used in new skin weights' % joint)
                 
                 new_weights[vert_index][joint_index] = value
                 influences_dict[joint_index] = None
@@ -2526,7 +2441,7 @@ class TransferWeight(object):
             
             bar.status('transfer weight from %s: %s of %s' % (joints, inc, len(weighted_verts)))
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
             
             if bar.break_signaled():
@@ -2537,7 +2452,7 @@ class TransferWeight(object):
         #cmds.setAttr('%s.normalizeWeights' % self.skin_cluster, 1)
         
         components= api.get_components(vert_ids)
-        influences = list(influences_dict.keys())
+        influences = influences_dict.keys()
         weight_array = om.MDoubleArray()
         
         new_influences  = []
@@ -2549,7 +2464,7 @@ class TransferWeight(object):
         for vert_id in vert_ids:  
             for influence_index in influences:
                 
-                if influence_index in new_weights[vert_id]:
+                if new_weights[vert_id].has_key(influence_index):
                     
                     weight_array.append(new_weights[vert_id][influence_index])
                 else:
@@ -2585,7 +2500,7 @@ class TransferWeight(object):
             smooth_skin_weights(verts, self._smooth_verts_iterations)
         
         bar.end()
-        util.show('Done: %s transfer %s to %s.' % (self.mesh, joints, new_joints))
+        vtool.util.show('Done: %s transfer %s to %s.' % (self.mesh, joints, new_joints))
          
 class AutoWeight2D(object):
     
@@ -2654,7 +2569,7 @@ class AutoWeight2D(object):
         self.verts = cmds.ls('%s.vtx[*]' % self.mesh, flatten = True)
     
     def _get_joint_index(self, joint):
-        for inc in range(0, len(self.joints)):
+        for inc in xrange(0, len(self.joints)):
             if self.joints[inc] == joint:
                 return inc
             
@@ -2663,7 +2578,7 @@ class AutoWeight2D(object):
         
         for vert in self.verts:
             position = cmds.xform(vert, q = True, ws = True, t = True)
-            position_vector_2D = util.Vector2D(position[0], position[2])
+            position_vector_2D = vtool.util.Vector2D(position[0], position[2])
             
             self.vertex_vectors_2D.append(position_vector_2D)
                 
@@ -2688,7 +2603,7 @@ class AutoWeight2D(object):
         last_position = None
         change = False
         
-        for inc in range(0, len(other_list)):
+        for inc in xrange(0, len(other_list)):
             
             
             
@@ -2766,7 +2681,7 @@ class AutoWeight2D(object):
         
         progress = core.ProgressBar('weighting %s:' % mesh, vert_count)
         
-        for inc in range(0, vert_count):
+        for inc in xrange(0, vert_count):
             
             joint_weights = self._get_vert_weight(inc)
             
@@ -2780,7 +2695,7 @@ class AutoWeight2D(object):
             progress.inc()
             progress.status('weighting %s: vert %s' % (mesh, inc))
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
             
             if progress.break_signaled():
@@ -2812,15 +2727,15 @@ class AutoWeight2D(object):
         old_multiplier = multiplier
         multiplier = 1
         
-        for inc in range(0, joint_count):
+        for inc in xrange(0, joint_count):
             
             if inc == joint_count-1:
                 break
             
-            start_vector = util.Vector2D( self.joint_vectors_2D[inc] )
-            end_vector = util.Vector2D( self.joint_vectors_2D[inc+1])
+            start_vector = vtool.util.Vector2D( self.joint_vectors_2D[inc] )
+            end_vector = vtool.util.Vector2D( self.joint_vectors_2D[inc+1])
             
-            percent = util.closest_percent_on_line_2D(start_vector, end_vector, vertex_vector, False)
+            percent = vtool.util.closest_percent_on_line_2D(start_vector, end_vector, vertex_vector, False)
             
             joint = self.orig_joints[inc]
             next_joint = self.orig_joints[inc+1]
@@ -2841,9 +2756,9 @@ class AutoWeight2D(object):
                 continue
             
             if self.fade_cosine:
-                percent = util.fade_cosine(percent)
+                percent = vtool.util.fade_cosine(percent)
             if self.fade_smoothstep:
-                percent = util.fade_smoothstep(percent)
+                percent = vtool.util.fade_smoothstep(percent)
             
             weight_total += 1.0-percent
             if not weight_total > 1:
@@ -3211,7 +3126,7 @@ class MultiJointShape(object):
                     
                 hookup_attribute = split
                     
-                number = util.get_trailing_number(split, number_count=2)
+                number = vtool.util.get_trailing_number(split, number_count=2)
                 if number:
                     inbetween = True
                     #hookup_attribute = split[:-2]
@@ -3349,7 +3264,7 @@ class MayaWrap(object):
     def _connect_driver_mesh(self, mesh, inc):
         
         if not cmds.objExists(mesh):
-            util.warning('%s could not be added to the wrap.  It does not exist.' % mesh)
+            vtool.util.warning('%s could not be added to the wrap.  It does not exist.' % mesh)
             return
         
         base = self._base_dict[mesh]
@@ -3413,7 +3328,7 @@ class MayaWrap(object):
         
         if meshes:
             
-            meshes = util.convert_to_sequence(meshes)
+            meshes = vtool.util.convert_to_sequence(meshes)
             
             self.driver_meshes = meshes
     
@@ -3429,10 +3344,10 @@ class MayaWrap(object):
         """
         
         if not self.meshes:
-            util.warning('No meshes to wrap given. No wrap built.')
+            vtool.util.warning('No meshes to wrap given. No wrap built.')
             return
         if not self.driver_meshes:
-            util.warning('No source meshs to drive wrap given. No wrap built.')
+            vtool.util.warning('No source meshs to drive wrap given. No wrap built.')
             return
         
         
@@ -4085,14 +4000,14 @@ class WeightFromMesh(object):
         
         for edge in edges:
             
-            edge_index = str(util.get_last_number(edge))
+            edge_index = str(vtool.util.get_last_number(edge))
             
             vertices = geo.edge_to_vertex(edge)
             
-            vrt1_index = str(util.get_last_number(vertices[0]))
-            vrt2_index = str(util.get_last_number(vertices[1]))
+            vrt1_index = str(vtool.util.get_last_number(vertices[0]))
+            vrt2_index = str(vtool.util.get_last_number(vertices[1]))
             
-            if edge_index in self._edge_bones:
+            if self._edge_bones.has_key(edge_index):
                 
                 
                 edge_joint_name = self._edge_bones[edge_index]
@@ -4133,7 +4048,7 @@ class WeightFromMesh(object):
         edge index can be a single edge index or a list of edge indices
         """
         
-        edge_indices = util.convert_to_sequence(edge_index)
+        edge_indices = vtool.util.convert_to_sequence(edge_index)
         
         for index in edge_indices:
             
@@ -4175,7 +4090,7 @@ class WeightFromMesh(object):
          
         cmds.delete(self._current_skin_mesh)
         
-        if util.get_maya_version() > 2018:
+        if vtool.util.get_maya_version() > 2018:
             #this might be temprorary
             skin = SkinCluster(self._target_mesh)
             skin.normalize(True)
@@ -4243,7 +4158,7 @@ def cluster_curve(curve, description, join_ends = False, join_start_end = False,
         cvs = cvs[2:cv_count-2]
         cv_count = len(cvs)+2
     
-    for inc in range(start_inc, cv_count):
+    for inc in xrange(start_inc, cv_count):
         cluster = cmds.cluster( '%s.cv[%s]' % (curve, inc), n = core.inc_name(description) )[1]
         clusters.append(cluster)
     
@@ -4516,7 +4431,7 @@ def get_index_at_skin_influence(influence, skin_deformer):
     if good_connection == None:
         return
     
-    search = util.search_last_number(good_connection)
+    search = vtool.util.search_last_number(good_connection)
     found_string = search.group()
     
     index = None
@@ -4666,10 +4581,10 @@ def get_skin_influence_weights(influence_name, skin_deformer):
     
     weights_dict = api.get_skin_weights_dict(skin_deformer)
         
-    if influence_index in weights_dict:
+    if weights_dict.has_key(influence_index):
         weights = weights_dict[influence_index]
         
-    if not influence_index in weights_dict:
+    if not weights_dict.has_key(influence_index):
         indices = attr.get_indices('%s.weightList' % skin_deformer)
         index_count = len(indices)
         weights = [0] * index_count
@@ -4700,7 +4615,7 @@ def get_skin_blend_weights(skin_deformer):
     
     values = []
     
-    for inc in range(0, len(indices)):
+    for inc in xrange(0, len(indices)):
         
         if inc in blend_weight_dict:
             
@@ -4775,18 +4690,8 @@ def set_skin_blend_weights(skin_deformer, weights, index = 0):
     
     api.set_skin_blend_weights(skin_deformer, weights, index)
     
-def set_skin_influence_weight(skin_deformer, weights, influence_name):
+    
 
-    influences = get_non_zero_influences(skin_deformer)
-    if not influence_name in influences:
-        cmds.skinCluster(skin_deformer, e = True, ai = influence_name, wt = 0.0, nw = 1)
-    
-    influence_index = get_index_at_skin_influence(influence_name, skin_deformer)
-    
-    attr = '%s.weightList[*].weights[%s]' % (skin_deformer, influence_index)
-    
-    cmds.setAttr(attr, *weights )
-    
 def set_skin_weights_to_zero(skin_deformer):
     """
     Set all the weights on the mesh to zero.
@@ -4829,11 +4734,11 @@ def get_joint_index_map(joints, skin_cluster):
     joint_map = {}
     
     if not cmds.objExists(skin_cluster):
-        util.warning('Skin cluster %s does not exist' % skin_cluster)
+        vtool.util.warning('Skin cluster %s does not exist' % skin_cluster)
     
     for joint in joints:
         if not cmds.objExists(joint):
-            util.warning('%s does not exist.' % joint)
+            vtool.util.warning('%s does not exist.' % joint)
             continue
                     
         index = get_index_at_skin_influence(joint, skin_cluster)
@@ -4855,7 +4760,7 @@ def average_skin_weights(verts):
     
     for influence_index in influence_indices:
         
-        if not influence_index in weights:
+        if not weights.has_key(influence_index):
             continue
         
         influence_weights = weights[influence_index]
@@ -4880,14 +4785,14 @@ def smooth_skin_weights(verts, iterations = 1, percent = 1, mode = 0, use_api = 
     """
     
     if not verts:
-        util.warning('Please select a mesh or vertices of one mesh')
+        vtool.util.warning('Please select a mesh or vertices of one mesh')
     
     api_object = get_object(verts[0])
     
     try:
         iter_vertex_fn = om.MItMeshVertex(api_object)
     except:
-        util.warning('Please select a mesh or vertices of one mesh')
+        vtool.util.warning('Please select a mesh or vertices of one mesh')
     
     iter_face_fn = None
     if mode == 0:
@@ -4896,7 +4801,7 @@ def smooth_skin_weights(verts, iterations = 1, percent = 1, mode = 0, use_api = 
     skin = find_deformer_by_type(api_object,'skinCluster', return_all = False)
     
     if percent == 0:
-        util.warning('Percent is zero.  Weights will not be changed.')
+        vtool.util.warning('Percent is zero.  Weights will not be changed.')
     
     vert_count = len(verts)
     
@@ -4953,7 +4858,7 @@ def smooth_skin_weights(verts, iterations = 1, percent = 1, mode = 0, use_api = 
                 for vertex in vertices:
                     found_verts[vertex] = None
             
-            surrounding_vert_indices = list(found_verts.keys())
+            surrounding_vert_indices = found_verts.keys()
             #sub_vert_count = len(surrounding_vert_indices)
             
             surrounding_vert_indices = surrounding_vert_indices + [vert_index]
@@ -5035,7 +4940,7 @@ def smooth_skin_weights(verts, iterations = 1, percent = 1, mode = 0, use_api = 
             
             for influence in influence_indices:
                 
-                if not influence in influences:
+                if not influences.has_key(influence):
                     continue
                 
                 influence_name = get_skin_influence_at_index(influence, skin)
@@ -5045,15 +4950,14 @@ def smooth_skin_weights(verts, iterations = 1, percent = 1, mode = 0, use_api = 
             if new_influences:
                 api.set_skin_weights(skin, weight_array, 0, vert_indices, new_influences)
         
-        core.refresh()
-        
+        cmds.refresh()
     
     progress.end()
     
 def sharpen_skin_weights(verts, iterations = 1, percent = 1):
     
     if percent == 0:
-        util.warning('Percent is zero, no change to weighting.')
+        vtool.util.warning('Percent is zero, no change to weighting.')
     
     mesh = geo.get_mesh_from_vertex(verts[0])
     
@@ -5087,7 +4991,7 @@ def sharpen_skin_weights(verts, iterations = 1, percent = 1):
             
             for influence_index in influence_indices:
             
-                if not influence_index in weights:
+                if not weights.has_key(influence_index):
                     continue
                 
                 influence_weights = weights[influence_index]
@@ -5098,7 +5002,7 @@ def sharpen_skin_weights(verts, iterations = 1, percent = 1):
     
             for influence_index in influence_indices:
                 
-                if not influence_index in weights:
+                if not weights.has_key(influence_index):
                     continue
                 
                 value = 0.0
@@ -5106,7 +5010,7 @@ def sharpen_skin_weights(verts, iterations = 1, percent = 1):
                 if total_risen == 0:
                     value = 0.0
                 else:
-                    if influence_index in risers:
+                    if risers.has_key(influence_index):
                         value = risers[influence_index]/total_risen
                 
                 
@@ -5124,8 +5028,7 @@ def sharpen_skin_weights(verts, iterations = 1, percent = 1):
             
             progress.next()
         
-        core.refresh()
-        
+        cmds.refresh()
         
     progress.end()
     
@@ -5158,11 +5061,11 @@ def delta_smooth_weights(mesh, top_joint = None):
                 count = current_count
             
         split_top = top_joint.split('|')
-        possible_top = '|'.join(split_top[:-1])
+        possible_top = string.join(split_top[:-1], '|')
         if cmds.nodeType(possible_top) == 'joint':
             top_joint = possible_top 
         
-        util.show('Top Joint found for delta smooth weights: %s' % top_joint)
+        vtool.util.show('Top Joint found for delta smooth weights: %s' % top_joint)
     
     cmds.bakeDeformer(sm = mesh, dm = mesh, ss = top_joint, ds = top_joint, mi = len(influences))
     
@@ -5224,7 +5127,7 @@ def get_mesh_at_deformer_index(deformer, index):
         mesh = meshes[0]
     else:
         
-        mesh_indices = attr.get_indices('%s.weightList[*]' % deformer, False)
+        mesh_indices = attr.get_indices('%s.input' % deformer)
         mesh = None
         
         for sub_mesh, mesh_index in zip(meshes, mesh_indices):
@@ -5234,7 +5137,7 @@ def get_mesh_at_deformer_index(deformer, index):
         try:
             mesh = meshes[index]
         except:
-            util.warning('index "%s" out of range of deformed meshes.' % index)
+            vtool.util.warning('index "%s" out of range of deformed meshes.' % index)
             return
         
     return mesh
@@ -5254,7 +5157,7 @@ def set_deformer_weights(weights, deformer, index = 0):
     if type(weights) == list:
         
         cmds.setAttr('%s.weightList[%s].weights[0:%s]' % (deformer, index, (len(weights)-1)), *weights)
-        #for inc in range(0, len(weights) ):
+        #for inc in xrange(0, len(weights) ):
         #    cmds.setAttr('%s.weightList[%s].weights[%s]' % (deformer, index, inc), weights[inc])
     
     if type(weights) == float or type(weights) == int:
@@ -5264,7 +5167,7 @@ def set_deformer_weights(weights, deformer, index = 0):
         
         weights = [weights] * vert_count
         
-        #for inc in range(0, vert_count):
+        #for inc in xrange(0, vert_count):
         cmds.setAttr('%s.weightList[%s].weights[0:%s]' % (deformer, index,(len(weights)-1)), *weights)
             
 def get_deformer_weights(deformer, index = 0):
@@ -5282,12 +5185,12 @@ def get_deformer_weights(deformer, index = 0):
     
     
     mesh = get_mesh_at_deformer_index(deformer, index)
-    
+        
     indices = cmds.ls('%s.vtx[*]' % mesh, flatten = True)
-    
+            
     weights = []
     
-    for inc in range(0, len(indices)):
+    for inc in xrange(0, len(indices)):
         weights.append( cmds.getAttr('%s.weightList[%s].weights[%s]' % (deformer, index, inc)) )
     
     return weights
@@ -5299,7 +5202,7 @@ def remove_deformer_influences(deformer, index=0):
     weights = get_deformer_weights(deformer, index)
     
     if not weights:
-        util.warning('No weights found on deformer: %s' % deformer)
+        vtool.util.warning('No weights found on deformer: %s' % deformer)
         return
     
     for index in range(0,len(weights)):
@@ -5455,7 +5358,7 @@ def set_all_weights_on_wire(wire_deformer, weight, slot = 0):
     if mesh:
         indices = cmds.ls('%s.vtx[*]' % mesh, flatten = True)    
     
-    for inc in range(0, len(indices) ):
+    for inc in xrange(0, len(indices) ):
         cmds.setAttr('%s.weightList[%s].weights[%s]' % (wire_deformer, slot, inc), weight)
 
 def set_wire_weights_from_skin_influence(wire_deformer, weighted_mesh, influence, auto_prune = False):
@@ -5473,7 +5376,7 @@ def set_wire_weights_from_skin_influence(wire_deformer, weighted_mesh, influence
     index = get_index_at_skin_influence(influence, skin_cluster)
     
     if index == None:
-        util.show('No influence %s on skin %s.' % (influence, skin_cluster))
+        vtool.util.show('No influence %s on skin %s.' % (influence, skin_cluster))
         return
     
     weights = get_skin_weights(skin_cluster)
@@ -5545,10 +5448,10 @@ def map_influence_on_verts(verts, skin_deformer):
         
         influence_index, value = found_value
                     
-        if not influence_index in value_map:
+        if not value_map.has_key(influence_index):
             value_map[influence_index] = value
     
-        if influence_index in value_map:
+        if value_map.has_key(influence_index):
             value_map[influence_index] += value
 
     return value_map
@@ -5593,7 +5496,7 @@ def get_faces_at_skin_influence(mesh, skin_deformer):
                 good_index = index
                 last_value = value
                                 
-        if not good_index in index_face_map:
+        if not index_face_map.has_key(good_index):
             index_face_map[good_index] = []
         
         index_face_map[good_index].append(face)
@@ -5755,7 +5658,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
     Returns:
         list: [convert_group, control_group, zero_verts] Zero verts are the verts that were not affected by the wire conversion.
     """
-    util.show('converting %s' % wire_deformer)
+    vtool.util.show('converting %s' % wire_deformer)
     
     convert_group = cmds.group(em = True, n = core.inc_name('convertWire_%s' % description))
     if generate_bind_pre:
@@ -5770,7 +5673,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
     base_curve = attr.get_attribute_input('%s.baseWire[0]' % wire_deformer, node_only= True)
     base_curve = cmds.listRelatives(base_curve, p = True)[0]
     
-    from . import rigs_util
+    from vtool.maya_lib import rigs_util
     
     joints, joints_group, control_group = rigs_util.create_joints_on_curve(curve, joint_count, description, create_controls = create_controls)
     
@@ -5796,7 +5699,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
             weights = {}
             verts_inc = {}
             
-            for sub_inc in range(0, len(wire_weights)):
+            for sub_inc in xrange(0, len(wire_weights)):
                 if wire_weights[sub_inc] > 0:
                     weighted_verts.append(verts[sub_inc])
                     weights[verts[sub_inc]] = wire_weights[sub_inc]
@@ -5842,7 +5745,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
                 distances_in_range = []
                 smallest_distance_inc = 0
                 
-                for sub_inc in range(0, joint_count):
+                for sub_inc in xrange(0, joint_count):
                     if distances[sub_inc] < smallest_distance:
                         smallest_distance_inc = sub_inc
                         smallest_distance = distances[sub_inc]
@@ -5851,7 +5754,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
                 if distance_falloff < falloff:
                     distance_falloff = falloff
                 
-                for sub_inc in range(0, joint_count):
+                for sub_inc in xrange(0, joint_count):
 
                     if distances[sub_inc] <= distance_falloff:
                         distances_in_range.append(sub_inc)
@@ -5876,7 +5779,7 @@ def convert_wire_deformer_to_skin(wire_deformer, description, joint_count = 10, 
                         distance = distances[distance_inc]
                         
                         distance_weight = distance/distance_falloff
-                        distance_weight = util.fade_sigmoid(distance_weight)
+                        distance_weight = vtool.util.fade_sigmoid(distance_weight)
                         
                         inverted_distance = distance_falloff - distance*distance_weight*distance_weight
                         
@@ -5937,7 +5840,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
         str: The top group above the joints.
     """
     
-    util.show('converting %s' % wire_deformer)
+    vtool.util.show('converting %s' % wire_deformer)
     
     convert_group = cmds.group(em = True, n = core.inc_name('convertWire_%s' % description))
     
@@ -5965,7 +5868,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
             weights = {}
             verts_inc = {}
             
-            for inc in range(0, len(wire_weights)):
+            for inc in xrange(0, len(wire_weights)):
                 if wire_weights[inc] > 0:
                     weighted_verts.append(verts[inc])
                     weights[verts[inc]] = wire_weights[inc]
@@ -6005,7 +5908,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
                 distances_in_range = []
                 smallest_distance_inc = 0
                 
-                for inc in range(0, joint_count):
+                for inc in xrange(0, joint_count):
                     if distances[inc] < smallest_distance:
                         smallest_distance_inc = inc
                         smallest_distance = distances[inc]
@@ -6014,7 +5917,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
                 if distance_falloff < falloff:
                     distance_falloff = falloff
                 
-                for inc in range(0, joint_count):
+                for inc in xrange(0, joint_count):
 
                     if distances[inc] <= distance_falloff:
                         distances_in_range.append(inc)
@@ -6039,7 +5942,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
                         distance = distances[distance_inc]
                         
                         distance_weight = distance/distance_falloff
-                        distance_weight = util.fade_sigmoid(distance_weight)
+                        distance_weight = vtool.util.fade_sigmoid(distance_weight)
                         
                         inverted_distance = distance_falloff - distance*distance_weight*distance_weight
                         
@@ -6077,7 +5980,7 @@ def convert_wire_to_skinned_joints(wire_deformer, description, joint_count = 10,
     
     return convert_group
         
-def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indicies = []):
+def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None):
     """
     Transfer the weight from one joint to another.  Does it for all vertices affected by source_joint in mesh.
     
@@ -6085,11 +5988,10 @@ def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indi
         source_joint (str): The name of a joint to take weights from.
         target_joint (str): The name of a joint to transfer weights to.
         mesh (str): The mesh to work with.
-        indicies : The indicies to work on, by default it does all found.
     """
     
     if mesh:
-        meshes = util.convert_to_sequence(mesh)
+        meshes = vtool.util.convert_to_sequence(mesh)
     if not mesh:
         meshes = get_meshes_skinned_to_joint(source_joint)
     
@@ -6110,7 +6012,7 @@ def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indi
         index = get_index_at_skin_influence(source_joint, skin_deformer)
         
         if index == None:
-            cmds.warning( 'Could not find index for %s on mesh %s' % (source_joint, mesh) )
+            cmds.warning( 'could not find index for %s on mesh %s' % (source_joint, mesh) )
             return
         
         other_index = get_index_at_skin_influence(target_joint, skin_deformer)
@@ -6119,28 +6021,7 @@ def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indi
         
         cmds.setAttr('%s.normalizeWeights' % skin_deformer, 0)
         
-        if not index in weights:
-            cmds.warning('Could not find weights for %s on mesh %s' % (source_joint, mesh))
-            return
-        
         index_weights = weights[index]
-        found_weights = []
-        found_weight_index_map = []
-        
-        if indicies:
-            sub_weights = weights[index]
-            
-            for custom_index in indicies:
-                
-                found_weights.append(sub_weights[custom_index])
-                found_weight_index_map.append(custom_index)
-            
-            if not found_weights:
-                cmds.warning('Could not find weights for %s on mesh %s' % (source_joint, mesh))
-                return
-            index_weights = found_weights
-        
-        
         
         other_index_weights = None
         
@@ -6151,11 +6032,7 @@ def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indi
         
         #this needs to use attr = cmds.setAttr('%s.weightList[*].weights[%s]' % (skin_cluster, index), *weights)
         
-        for inc in range(0,weight_count):
-            
-            vert_index = inc
-            if found_weight_index_map:
-                vert_index = found_weight_index_map[inc]
+        for inc in xrange(0,weight_count):
             
             if index_weights[inc] == 0:
                 continue
@@ -6166,8 +6043,8 @@ def transfer_joint_weight_to_joint(source_joint, target_joint, mesh = None, indi
             if not other_index_weights == None:
                 weight_value = index_weights[inc] + other_index_weights[inc]
             
-            cmds.setAttr('%s.weightList[ %s ].weights[%s]' % (skin_deformer, vert_index, other_index), weight_value)
-            cmds.setAttr('%s.weightList[ %s ].weights[%s]' % (skin_deformer, vert_index, index), 0)
+            cmds.setAttr('%s.weightList[ %s ].weights[%s]' % (skin_deformer, inc, other_index), weight_value)
+            cmds.setAttr('%s.weightList[ %s ].weights[%s]' % (skin_deformer, inc, index), 0)
         
         cmds.setAttr('%s.normalizeWeights' % skin_deformer, 1)
         cmds.skinCluster(skin_deformer, edit = True, forceNormalizeWeights = True)
@@ -6201,7 +6078,7 @@ def transfer_cluster_weight_to_joint(cluster, joint, mesh):
     
     weights = get_cluster_weights(cluster)
     
-    for inc in range(0, len(weights)):
+    for inc in xrange(0, len(weights)):
         
         vert = '%s.vtx[%s]' % (mesh, inc)
         
@@ -6274,23 +6151,18 @@ def skin_mesh_from_mesh(source_mesh, target_mesh, exclude_joints = [], include_j
         uv_space (bool): Wether to copy the skin weights in uv space rather than point space.
     '''
     
-    target_nice_name = core.get_basename(target_mesh, remove_namespace = False)
-    source_nice_name = core.get_basename(source_mesh, remove_namespace = False)
-    
-    from_string = 'Skinning   ' + target_nice_name
-    from_string = from_string.ljust(60) + '< from mesh:\t' + source_nice_name
-    util.show(from_string)
+    vtool.util.show('Skinning %s using weights from %s' % (target_mesh, source_mesh))
     
     skin = find_deformer_by_type(source_mesh, 'skinCluster')
     
     if not skin:
-        cmds.warning('%s has no skin. Nothing to copy.' % source_nice_name)
+        cmds.warning('%s has no skin. Nothing to copy.' % source_mesh)
         return
     
     other_skin = find_deformer_by_type(target_mesh, 'skinCluster')
     
     if other_skin:
-        cmds.warning('%s already has a skin cluster. Deleteing existing.' % target_nice_name)
+        cmds.warning('%s already has a skin cluster. Deleteing existing.' % target_mesh)
         cmds.delete(other_skin)
         other_skin = None
     
@@ -6315,22 +6187,14 @@ def skin_mesh_from_mesh(source_mesh, target_mesh, exclude_joints = [], include_j
         skin_name = core.get_basename(target_mesh)
         other_skin = cmds.skinCluster(influences, target_mesh, tsb=True, n = core.inc_name('skin_%s' % skin_name))[0]
       
-    custom = False
-      
     if other_skin:
         if not uv_space:
-            
-            if core.has_shape_of_type(source_mesh, 'mesh') and core.has_shape_of_type(target_mesh, 'nurbsSurface'):
-                skin_nurbs_from_mesh(source_mesh, target_mesh)
-                custom = True
-            
-            if not custom:
-                cmds.copySkinWeights(ss = skin, 
-                                     ds = other_skin, 
-                                     noMirror = True, 
-                                     surfaceAssociation = 'closestPoint', 
-                                     influenceAssociation = ['name'], 
-                                     normalize = True)
+            cmds.copySkinWeights(ss = skin, 
+                                 ds = other_skin, 
+                                 noMirror = True, 
+                                 surfaceAssociation = 'closestPoint', 
+                                 influenceAssociation = ['name'], 
+                                 normalize = True)
         
         if uv_space:
             cmds.copySkinWeights(ss = skin, 
@@ -6340,18 +6204,16 @@ def skin_mesh_from_mesh(source_mesh, target_mesh, exclude_joints = [], include_j
                                  influenceAssociation = ['name'],
                                  uvSpace = ['map1','map1'], 
                                  normalize = True)
-            
-        if not custom:
-            skinned = cmds.skinCluster(other_skin, query = True, wi = True)
-    
-            unskinned = set(influences) ^ set(skinned)
-            
-            for joint in unskinned:
-                cmds.skinCluster(other_skin, e = True, ri = joint)
+
+        skinned = cmds.skinCluster(other_skin, query = True, wi = True)
+
+        unskinned = set(influences) ^ set(skinned)
+        
+        for joint in unskinned:
+            cmds.skinCluster(other_skin, e = True, ri = joint)
             
     return other_skin
 
-@core.undo_off
 def skin_group_from_mesh(source_mesh, group, include_joints = [], exclude_joints = [], leave_existing_skins = False):
     ''' 
     This skins a group of meshes based on the skinning of the source mesh.  
@@ -6374,7 +6236,7 @@ def skin_group_from_mesh(source_mesh, group, include_joints = [], exclude_joints
     
     cmds.select(cl = True)
     cmds.select(group)
-    core.refresh()
+    cmds.refresh()
     
     relatives = cmds.listRelatives(group, ad = True, type = 'transform', f = True)
     relatives.append(group)
@@ -6395,7 +6257,7 @@ def skin_group_from_mesh(source_mesh, group, include_joints = [], exclude_joints
             try:
                 skin_mesh_from_mesh(source_mesh, relative, include_joints = include_joints, exclude_joints = exclude_joints)
             except (RuntimeError):
-                util.warning('Failed to copy skin weights onto %s' % relative)                
+                vtool.util.warning('Failed to copy skin weights onto %s' % relative)                
         if shape and cmds.nodeType(shape[0]) == 'nurbsCurve':
             skin = find_deformer_by_type(relative, deformer_type = 'skinCluster')
             
@@ -6405,7 +6267,7 @@ def skin_group_from_mesh(source_mesh, group, include_joints = [], exclude_joints
             try:
                 skin_mesh_from_mesh(source_mesh, relative, include_joints = include_joints, exclude_joints = exclude_joints)
             except (RuntimeError):
-                util.warning('Failed to copy skin weights onto %s' % relative)
+                vtool.util.warning('Failed to copy skin weights onto %s' % relative)
                 
                 
             
@@ -6433,7 +6295,7 @@ def skin_lattice_from_mesh(source_mesh, target, divisions = [10,10,10], falloff 
         include_joints (list): Include the named joint from the skin cluster.
     '''
     
-    target = util.convert_to_sequence(target)
+    target = vtool.util.convert_to_sequence(target)
     
     if not name:
         name = target[0]
@@ -6491,60 +6353,6 @@ def skin_group(joints, group, dropoff_rate = 4.0):
         except:
             pass
 
-def skin_nurbs_from_mesh(source_mesh, target_nurbs):
-    mesh = source_mesh
-    nurbs = target_nurbs
-    
-    mesh_skin = find_deformer_by_type(mesh,'skinCluster',return_all = False)
-
-    shapes = core.get_shapes(mesh)
-    if not shapes:
-        return
-    mesh = shapes[0]
-    mobject = api.nodename_to_mobject(mesh)
-    intersect = api.MeshIntersector(mobject)
-    
-    influences = get_influences_on_skin(mesh_skin,short_name = False)
-    mesh_skin_weights = get_skin_weights(mesh_skin)
-
-    existing_skin = find_deformer_by_type(nurbs, 'skinCluster')
-    if existing_skin:
-        cmds.delete(existing_skin)
-
-    skin = SkinCluster(nurbs)
-    skin_name = skin.get_skin()
-
-    for influence in influences:
-        skin.add_influence(influence)
-
-    cvs = cmds.ls('%s.cv[*:*]' % nurbs, flatten = True)
-    
-    for inc in range(0, len(cvs)):
-        
-        cv_name = cvs[inc]
-        
-        source_vector = cmds.xform(cv_name, q = True, ws = True, t = True)
-        
-        for inc2 in range(0,len(influences)):
-            influence = influences[inc2]
-            
-            bary_u,bary_v, face_id, triangle_id = intersect.get_closest_point_barycentric(source_vector)
-            ids = api.get_triangle_ids(shapes[0], face_id, triangle_id)
-            influence_index = get_index_at_skin_influence(influence, mesh_skin)
-            if influence_index in mesh_skin_weights:
-                weights = mesh_skin_weights[influence_index]
-            
-                w1 = weights[ids[0]]
-                w2 = weights[ids[1]]
-                w3 = weights[ids[2]]
-    
-                weight = bary_u*w1 + bary_v*w2 + (1 - bary_u - bary_v)*w3
-                
-                if weight == 0 or weight < 0.0001:
-                    continue
-                attr = '%s.weightList[%s].weights[%s]' % (skin_name, inc, inc2)
-                cmds.setAttr(attr, weight)
-                
 def skin_mirror(mesh):
     """
     Not worrking at all
@@ -6641,7 +6449,7 @@ def get_closest_verts_to_joints(joints, verts):
             
             pos = cmds.xform(vert, q = True, ws = True, t = True)
             
-            distance = util.get_distance(joint_pos, pos)
+            distance = vtool.util.get_distance(joint_pos, pos)
             
             if distance < distance_dict[vert][0]:
                 distance_dict[vert][0] = distance
@@ -6674,11 +6482,11 @@ def create_wrap(source_mesh, target_mesh, return_class = False):
     """
     
     if not source_mesh:
-        util.error('No source mesh given.')
+        vtool.util.error('No source mesh given.')
     if not target_mesh:
-        util.error('No target mesh given.')
+        vtool.util.error('No target mesh given.')
     
-    source_mesh = util.convert_to_sequence(source_mesh)
+    source_mesh = vtool.util.convert_to_sequence(source_mesh)
     
     wrap = MayaWrap(target_mesh)
     
@@ -6692,30 +6500,11 @@ def create_wrap(source_mesh, target_mesh, return_class = False):
     
     return wrap.base_meshes
 
-def proximity_wrap_create(source_mesh, target_mesh):
-    from maya.internal.nodes.proximitywrap import cmd_edit
-    from maya.internal.nodes.proximitywrap import node_interface
-    
-    proximity_wrap = cmds.deformer(target_mesh, type="proximityWrap")
-
-    pwni = node_interface.NodeInterface(proximity_wrap[0])
-    
-    shapes = core.get_shapes(source_mesh, no_intermediate = True)
-    pwni.addDriver(shapes[-1])
-    
-    return proximity_wrap[0]
-
-def proximity_wrap_add_driver(proximity_wrap, driver_mesh):
-    from maya.internal.nodes.proximitywrap import node_interface
-    pwni = node_interface.NodeInterface(proximity_wrap[0])
-    pwni.addDriver(driver_mesh+'Shape')
-    
-
 """
 def exclusive_bind_wrap(source_mesh, target_mesh):
     wrap = MayaWrap(target_mesh)
     
-    source_mesh = util.convert_to_sequence(source_mesh)
+    source_mesh = vtool.util.convert_to_sequence(source_mesh)
     
     wrap.set_driver_meshes(source_mesh)
         
@@ -6744,7 +6533,7 @@ def prune_wire_weights(deformer, value = 0.0001):
     
     found_verts = []
     
-    for inc in range(0, len(verts)):
+    for inc in xrange(0, len(verts)):
         weight_value = cmds.getAttr('%s.weightList[%s].weights[%s]' % (deformer, 0, inc))
         
         if weight_value < value:
@@ -6841,7 +6630,7 @@ def weight_hammer_verts(verts = None, print_info = True):
         if print_info:
             
             #do not remove
-            util.show( inc, 'of', count )
+            vtool.util.show( inc, 'of', count )
         
         mel.eval('weightHammerVerts;')
             
@@ -6871,7 +6660,7 @@ def map_blend_target_alias_to_index(blendshape_node):
         alias = aliases[inc]
         weight = aliases[inc+1]
         
-        index = util.get_end_number(weight)
+        index = vtool.util.get_end_number(weight)
         
         alias_map[index] = alias
     
@@ -6900,7 +6689,7 @@ def map_blend_index_to_target_alias(blendshape_node):
         alias = aliases[inc]
         weight = aliases[inc+1]
         
-        index = util.get_end_number(weight)
+        index = vtool.util.get_end_number(weight)
         
         alias_map[alias] = index
         
@@ -6945,7 +6734,7 @@ def chad_extract_shape(skin_mesh, corrective, replace = False):
         
         maya_version = cmds.about(version = True)
         
-        if util.get_maya_version() < 2017 and maya_version.find('2016 Extension 2') == -1:
+        if vtool.util.get_maya_version() < 2017 and maya_version.find('2016 Extension 2') == -1:
             if not cmds.pluginInfo('cvShapeInverterDeformer.py', query=True, loaded=True):
             
                 split_name = __name__.split('.')
@@ -6956,17 +6745,17 @@ def chad_extract_shape(skin_mesh, corrective, replace = False):
                 
                 cmds.loadPlugin( file_name )
             
-            from . import cvShapeInverterScript as correct
+            import cvShapeInverterScript as correct
         
         envelopes.turn_off()
         
         if skin:
             cmds.setAttr('%s.envelope' % skin, 1)
         
-        if util.get_maya_version() < 2017 and maya_version.find('2016 Extension 2') == -1:
+        if vtool.util.get_maya_version() < 2017 and maya_version.find('2016 Extension 2') == -1:
             offset = correct.invert(skin_mesh, corrective)
             cmds.delete(offset, ch = True)
-        if util.get_maya_version() >= 2017 or maya_version.find('2016 Extension 2') > -1:
+        if vtool.util.get_maya_version() >= 2017 or maya_version.find('2016 Extension 2') > -1:
             if not cmds.pluginInfo('invertShape', query=True, loaded=True):
                 cmds.loadPlugin( 'invertShape' )
             offset = mel.eval('invertShape %s %s' % (skin_mesh, corrective))
@@ -7014,7 +6803,7 @@ def chad_extract_shape(skin_mesh, corrective, replace = False):
         return offset
         
     except (RuntimeError):
-        util.error( traceback.format_exc() )
+        vtool.util.error( traceback.format_exc() )
 
 def get_blendshape_delta(orig_mesh, source_meshes, corrective_mesh, replace = True):
     """
@@ -7030,7 +6819,7 @@ def get_blendshape_delta(orig_mesh, source_meshes, corrective_mesh, replace = Tr
         str: name of new delta mesh
     """
     
-    sources = util.convert_to_sequence(source_meshes)
+    sources = vtool.util.convert_to_sequence(source_meshes)
     
     offset = cmds.duplicate(corrective_mesh)[0]
     
@@ -7095,9 +6884,9 @@ def create_surface_joints(surface, name, uv_count = [10, 4], offset = 0):
     top_group = cmds.group(em = True, n = core.inc_name('rivetJoints_1_%s' % name))
     joints = []
     
-    for inc in range(0, uv_count[0]):
+    for inc in xrange(0, uv_count[0]):
         
-        for inc2 in range(0, uv_count[1]):
+        for inc2 in xrange(0, uv_count[1]):
             
             rivet = geo.Rivet(name)
             rivet.set_surface(surface, section_value_u, section_value_v)
@@ -7117,7 +6906,7 @@ def create_surface_joints(surface, name, uv_count = [10, 4], offset = 0):
     return top_group, joints
         
     
-def quick_blendshape(source_mesh, target_mesh, weight = 1, blendshape = None, front_of_chain = True):
+def quick_blendshape(source_mesh, target_mesh, weight = 1, blendshape = None):
     """
     Create a blendshape. Add target source_mesh into the target_mesh.
     If target_mesh already has a blendshape, add source_mesh into existing blendshape.
@@ -7169,7 +6958,7 @@ def quick_blendshape(source_mesh, target_mesh, weight = 1, blendshape = None, fr
             
             bad_blendshape = False
             
-            for inc in range(len(target_shapes)):
+            for inc in xrange(len(target_shapes)):
             
                 target_shape = target_shapes[inc]
                 shape = shapes[inc]
@@ -7199,7 +6988,7 @@ def quick_blendshape(source_mesh, target_mesh, weight = 1, blendshape = None, fr
         
     if not cmds.objExists(blendshape_node):
         
-        cmds.blendShape(source_mesh, target_mesh, tc = False, weight =[0,weight], n = blendshape_node, foc = front_of_chain)
+        cmds.blendShape(source_mesh, target_mesh, tc = False, weight =[0,weight], n = blendshape_node, foc = True)
         
     try:
         cmds.setAttr('%s.%s' % (blendshape_node, source_mesh_name), weight)
@@ -7229,11 +7018,11 @@ def isolate_shape_axis(base, target, axis_list = ['X','Y','Z']):
     
     vert_count = len(verts)
     
-    axis_name = '_'.join(axis_list)
+    axis_name = string.join(axis_list, '_')
     
     new_target = cmds.duplicate(target, n = '%s_%s' % (target, axis_name))[0]
     
-    for inc in range(0, vert_count):
+    for inc in xrange(0, vert_count):
         
         base_pos = cmds.xform('%s.vtx[%s]' % (base, inc), q = True, t = True, ws = True)
         target_pos = cmds.xform('%s.vtx[%s]' % (target, inc), q = True, t = True, ws = True)
@@ -7290,7 +7079,7 @@ def reset_tweak(tweak_node):
                 cmds.setAttr('%s.vlist[%s].vertex[%s].yVertex' % (tweak_node, index, sub_index), 0.0)
                 cmds.setAttr('%s.vlist[%s].vertex[%s].zVertex' % (tweak_node, index, sub_index), 0.0)
         except:
-            util.error( traceback.format_exc() )
+            vtool.util.error( traceback.format_exc() )
     return
 
 def reset_tweaks_on_mesh(mesh):
@@ -7298,9 +7087,6 @@ def reset_tweaks_on_mesh(mesh):
     Reset the tweak nodes found on deformers on the given mesh.
     """
     tweaks = find_deformer_by_type(mesh, 'tweak', return_all = True)
-    
-    if not tweaks:
-        return
     
     for tweak in tweaks:
         reset_tweak(tweak)
@@ -7351,17 +7137,14 @@ def match_geo_blendshape(source_geo, target_geo, attr_name, target_group = 0):
         if is_source_a_mesh and is_target_a_curve:
             continue
         
-        if not is_source_a_mesh and not is_target_a_mesh and not is_source_a_curve and not is_target_a_curve:
-            continue
-        
         if is_source_a_curve and is_target_a_curve:
             if not geo.is_cv_count_same(source_geo[inc], target_geo[inc]):
-                util.warning('Skipping blendshape curve because incompatible:  %s   %s' % (source_geo[inc], target_geo[inc]))
+                vtool.util.warning('Skipping blendshape curve because incompatible:  %s   %s' % (source_geo[inc], target_geo[inc]))
                 continue
         
         if is_source_a_mesh and is_target_a_mesh:
             if not geo.is_mesh_blend_compatible(source_geo[inc], target_geo[inc]):
-                util.warning('Skipping blendshape mesh because incompatible:  %s   %s' % (source_geo[inc], target_geo[inc]))
+                vtool.util.warning('Skipping blendshape mesh because incompatible:  %s   %s' % (source_geo[inc], target_geo[inc]))
                 continue
         
         matches.append([source_geo[inc], target_geo[inc]])
@@ -7372,24 +7155,16 @@ def match_geo_blendshape(source_geo, target_geo, attr_name, target_group = 0):
     
     blendshape = cmds.deformer(targets, type = 'blendShape')[0]
     cmds.setAttr('%s.origin' % blendshape, 0)
-    
-    inc2 = 0
-    
-    for match in matches:
         
-        out_connect = None
+    for inc in range(0, len(matches)):
         
-        if geo.is_a_mesh(match[0]):
-            out_connect = '%s.worldMesh' % match[0]
-        if geo.is_a_curve(match[0]):
-            out_connect = '%s.worldSpace' % match[0]
-        
-        if not out_connect:
-            continue
+        if geo.is_a_mesh(matches[inc][0]):
+            out_connect = '%s.worldMesh' % matches[inc][0]
+        if geo.is_a_curve(matches[inc][0]):
+            out_connect = '%s.worldSpace' % matches[inc][0]
         
         cmds.connectAttr(out_connect, 
-                         '%s.inputTarget[%s].inputTargetGroup[%s].inputTargetItem[6000].inputGeomTarget' % (blendshape, inc2, target_group))
-        inc2 += 1
+                         '%s.inputTarget[%s].inputTargetGroup[%s].inputTargetItem[6000].inputGeomTarget' % (blendshape, inc, target_group))
         
         if not cmds.objExists('%s.%s' % (blendshape, attr_name)):
             cmds.setAttr('%s.weight[%s]' % (blendshape, target_group), 1)

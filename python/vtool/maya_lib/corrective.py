@@ -1,24 +1,21 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import string
 
-from .. import util
+import vtool.util
+from vtool.maya_lib import anim
 
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
-    
-
-from . import anim
-from . import core
-from . import blendshape
-from . import attr
-from . import space
-from . import geo
-from . import deform
-from . import shade
-from . import rigs_util
+    #import util
+import core
+import blendshape
+import attr
+import space
+import geo
+import deform
+import shade
+import rigs_util
 
 def get_pose_instance(pose_name, pose_group = 'pose_gr'):
     """
@@ -277,7 +274,7 @@ class PoseManager(object):
         if pose_instance:
             pose_instance.goto_pose()
         else:
-            util.warning('%s not found' % pose)
+            vtool.util.warning('%s not found' % pose)
         
     def set_pose_data(self, pose):
         """
@@ -544,7 +541,7 @@ class PoseManager(object):
         
         count = pose.get_mesh_count()
         
-        for inc in range(0, count):
+        for inc in xrange(0, count):
             mesh = pose.get_mesh(inc)
             pose.visibility_off(mesh, view_only = True)
         
@@ -619,7 +616,7 @@ class PoseManager(object):
             detached = None
             
             if self.detached_attributes:
-                if pose_name in self.detached_attributes:
+                if self.detached_attributes.has_key(pose_name):
                     detached = self.detached_attributes[pose_name]
             
             pose.attach(detached)
@@ -647,17 +644,17 @@ class PoseManager(object):
         if not poses:
             poses = self.get_poses()
         if poses:
-            util.convert_to_sequence(poses)
+            vtool.util.convert_to_sequence(poses)
         
         count = len(poses)
 
         progress = core.ProgressBar('adding poses ... ', count)
         
-        for inc in range(count):
+        for inc in xrange(count):
             
             pose_name = poses[inc]
             
-            if util.break_signaled():
+            if vtool.util.break_signaled():
                 break
                                 
             if progress.break_signaled():
@@ -735,9 +732,9 @@ class PoseManager(object):
             other = space.find_transform_right_side(pose, check_if_exists=False)
             if other:
                 bar.status('Mirror pose: %s' % pose)
-                util.show('Mirror pose: %s' % pose )
+                vtool.util.show('Mirror pose: %s' % pose )
                 mirror = self.mirror_pose(pose)
-                core.refresh()
+                cmds.refresh()
                 if mirror:
                     found.append(mirror)
             
@@ -766,42 +763,7 @@ class PoseManager(object):
                     found.append(pose)
         
         return found
-
-    def zero_out_blendshape_target_weights(self, pose = None):
-        """
-        Turn off non-connected blendshape targets.
-        """
-        
-        if pose:
-            poses = [pose]
-        else:
-            poses = self.get_poses(all_descendents=True)
-        
-        visited_blends = {}
-        
-        for pose in poses:
-            pose_inst = self.get_pose_instance(pose)
-            
-            if hasattr(pose_inst, 'get_mesh_count'):
-                for inc in range(0, pose_inst.get_mesh_count() ):
-                    blend = pose_inst.get_blendshape(inc)
-                    
-                    blend_inst = blendshape.BlendShape(blend)
-                    targets = blend_inst.get_target_names()
-                    
-                    if blend in visited_blends:
-                        continue
-                    
-                    for target in targets:
-                        target_name = '%s.%s' % (blend, target)
-                        
-                        try:
-                            cmds.setAttr(target_name, 0)
-                        except:
-                            pass
-                        
-                    visited_blends[blend] = None
-                    
+                
 class PoseGroup(object):
     """
     This pose is a group to parent poses under.
@@ -951,7 +913,7 @@ class PoseGroup(object):
         Returns:
             str: The new name.
         """
-        description = util.clean_name_string(description)
+        description = vtool.util.clean_name_string(description)
         description = core.inc_name(description)
         self._set_description(description)
             
@@ -1021,11 +983,10 @@ class PoseGroup(object):
                     
                 if not mesh:
                     
-                    if hasattr(child_instance, 'get_target_meshes'):
-                        sub_meshes = child_instance.get_target_meshes()
-                        for sub_mesh in sub_meshes:
-                            index = child_instance.get_target_mesh_index(sub_mesh)
-                            child_instance.create_blend(index, goto_pose = True)
+                    sub_meshes = child_instance.get_target_meshes()
+                    for sub_mesh in sub_meshes:
+                        index = child_instance.get_target_mesh_index(sub_mesh)
+                        child_instance.create_blend(index, goto_pose = True)
             
                 if mesh:
                     if hasattr(child_instance, 'get_target_mesh_index'):
@@ -1109,7 +1070,7 @@ class PoseGroup(object):
             detached = None
             
             if type(outputs) == dict:
-                if child in outputs:
+                if outputs.has_key(child):
                     detached = outputs[child]
             
             child_instance= get_pose_instance(child)
@@ -1322,7 +1283,7 @@ class PoseBase(PoseGroup):
         
         found = []
         
-        for inc in range(0, self._get_mesh_count()):
+        for inc in xrange(0, self._get_mesh_count()):
             mesh = self.get_mesh(inc)
             found.append(mesh)
             
@@ -1330,7 +1291,7 @@ class PoseBase(PoseGroup):
         
     def _check_if_mesh_connected(self, name):
         
-        for inc in range(0, self._get_mesh_count()):
+        for inc in xrange(0, self._get_mesh_count()):
             
             mesh = self.get_mesh(inc)
             
@@ -1488,7 +1449,7 @@ class PoseBase(PoseGroup):
         
         if not other_target_mesh or not cmds.objExists(other_target_mesh):
             if other_target_mesh:    
-                util.warning('Could not find %s to mirror to!\nUsing %s as other mesh, which may cause errors!' % (other_target_mesh, target_mesh) )
+                vtool.util.warning('Could not find %s to mirror to!\nUsing %s as other mesh, which may cause errors!' % (other_target_mesh, target_mesh) )
             other_target_mesh = target_mesh
         
         deform.set_envelopes(target_mesh, 0)
@@ -1587,53 +1548,53 @@ class PoseBase(PoseGroup):
             
             if left_right:
                 
-                start, end = util.find_special('L', value, 'end')
+                start, end = vtool.util.find_special('lf_', value, 'first')
                 
                 if start != None:
-                    other = util.replace_string(value, 'R', start, end)
-            
-                if not other:
-                    start, end = util.find_special('_L_', value, 'last')
-                    
-                    if start != None:
-                        other = util.replace_string(value, '_R_', start, end)
-            
-                if not other:
-                    start, end = util.find_special('lf_', value, 'start')
-                    
-                    if start != None:
-                        other = util.replace_string(value, 'rt_', start, end)
+                    other = vtool.util.replace_string(value, 'rt_', start, end)
                     
                 if not other:
-                    start,end = util.find_special('l_', value, 'start')
+                    start,end = vtool.util.find_special('l_', value, 'first')
                 
                     if start != None:
-                        other = util.replace_string(value, 'r_', start, end)
-                        
+                        other = vtool.util.replace_string(value, 'r_', start, end)
+                    
+                if not other:
+                    start, end = vtool.util.find_special('_L_', value, 'last')
+                    
+                    if start != None:
+                        other = vtool.util.replace_string(value, '_R_', start, end)
+                    
+                if not other:
+                    start, end = vtool.util.find_special('L', value, 'end')
+                    
+                    if start != None:
+                        other = vtool.util.replace_string(value, 'R', start, end)
+                    
             if not left_right:
                 
-                start, end = util.find_special('R', value, 'end')
+                start, end = vtool.util.find_special('rt_', value, 'first')
                 
                 if start != None:
-                    other = util.replace_string(value, 'L', start, end)
+                    other = vtool.util.replace_string(value, 'lf_', start, end)
                 
                 if not other:
-                    start, end = util.find_special('_R_', value, 'last')
+                    start,end = vtool.util.find_special('r_', value, 'first')
+                
+                    if start != None:
+                        other = vtool.util.replace_string(value, 'l_', start, end)
+                
+                if not other:
+                    start, end = vtool.util.find_special('_R_', value, 'last')
                     
                     if start != None:
-                        other = util.replace_string(value, '_L_', start, end)
+                        other = vtool.util.replace_string(value, '_L_', start, end)
                 
                 if not other:
-                    start, end = util.find_special('rt_', value, 'first')
-                
+                    start, end = vtool.util.find_special('R', value, 'end')
+                    
                     if start != None:
-                        other = util.replace_string(value, 'lf_', start, end)
-                
-                if not other:
-                    start,end = util.find_special('r_', value, 'first')
-                
-                    if start != None:
-                        other = util.replace_string(value, 'l_', start, end)
+                        other = vtool.util.replace_string(value, 'L', start, end)
                 
             fixed.append(other)
             
@@ -1644,7 +1605,7 @@ class PoseBase(PoseGroup):
         
         fixed.reverse()
         
-        fixed = '|'.join(fixed)
+        fixed = string.join(fixed, '|')
         
         return fixed
     
@@ -1657,7 +1618,7 @@ class PoseBase(PoseGroup):
                 cmds.setAttr('%s.visibility' % node, 1)
             except:
                 pass
-                #util.show( 'Could not set visibility on %s.' % node )
+                #vtool.util.show( 'Could not set visibility on %s.' % node )
     
         if not bool_value:
             try:
@@ -1665,7 +1626,7 @@ class PoseBase(PoseGroup):
                 cmds.setAttr('%s.visibility' % node, 0)    
             except:
                 pass
-                #util.show( 'Could not set visibility on %s.' % node )
+                #vtool.util.show( 'Could not set visibility on %s.' % node )
     
     def _initialize_blendshape_node(self, target_mesh):
         
@@ -1730,7 +1691,7 @@ class PoseBase(PoseGroup):
             str: The new name.
         """
         
-        old_description = util.clean_name_string( self.description )
+        old_description = vtool.util.clean_name_string( self.description )
         
         super(PoseBase, self).rename(description)
         
@@ -1921,7 +1882,7 @@ class PoseBase(PoseGroup):
         """
         meshes = []
         
-        for inc in range(0, self._get_mesh_count()):
+        for inc in xrange(0, self._get_mesh_count()):
             mesh = self.get_mesh(inc)
             
             mesh = self.get_target_mesh(mesh)
@@ -2051,7 +2012,7 @@ class PoseBase(PoseGroup):
         """
         count = self._get_mesh_count()
         
-        for inc in range(0, count):
+        for inc in xrange(0, count):
             
             deformed_mesh = self.get_mesh(inc)
             original_mesh = self.get_target_mesh(deformed_mesh)
@@ -2083,7 +2044,7 @@ class PoseBase(PoseGroup):
         
         count = self._get_mesh_count()
         
-        for inc in range(0, count):
+        for inc in xrange(0, count):
             
             if self.is_mesh_in_sculpt(inc) and only_not_in_sculpt:
                 continue
@@ -2143,12 +2104,12 @@ class PoseBase(PoseGroup):
                     sculpt_mesh = self.get_mesh(sculpt_index)
                     target_mesh = self.get_target_mesh(sculpt_mesh)
                 
-                if not target_mesh in envelopes:
+                if not envelopes.has_key(target_mesh):
                     envelope = deform.EnvelopeHistory(target_mesh)
                     envelope.turn_off_exclude(['skinCluster'])
                     envelopes[target_mesh] = envelope
                 
-                vtx_index = util.get_last_number(thing)
+                vtx_index = vtool.util.get_last_number(thing)
                 
                 pos = cmds.xform('%s.vtx[%s]' % (target_mesh, vtx_index), q = True, ws = True, t = True)
                 pos_sculpt = cmds.xform('%s.vtx[%s]' % (sculpt_mesh, vtx_index), q = True, ws = True, t = True)
@@ -2293,7 +2254,7 @@ class PoseBase(PoseGroup):
         
         pose = True
         
-        for inc in range(0, count):
+        for inc in xrange(0, count):
             
             if self.create_blends_went_to_pose:
                 pose = False
@@ -2411,7 +2372,7 @@ class PoseBase(PoseGroup):
             detached = None
             
             if type(outputs) == dict:
-                if child in outputs:
+                if outputs.has_key(child):
                     detached = outputs[child]
             
             child_instance= manager.get_pose_instance(child)
@@ -2669,7 +2630,7 @@ class PoseNoReader(PoseBase):
         pose_input.create(control)
     
     def _multiply_weight(self, destination):
-        
+
         multiply = self._get_named_message_attribute('multiplyDivide1')
         
         if not multiply:
@@ -2683,7 +2644,6 @@ class PoseNoReader(PoseBase):
         
         attr.disconnect_attribute(destination)
         cmds.connectAttr('%s.outputX' % multiply, destination)
-        
     
     def _connect_weight_input(self, attribute):
         
@@ -2749,6 +2709,21 @@ class PoseNoReader(PoseBase):
             blend.create_target(nicename, offset)
                 
         blend_attr = '%s.%s' % (blend.blendshape, nicename)
+        weight_attr = '%s.weight' % self.pose_control
+        input_attr = attr.get_attribute_input(blend_attr)
+        
+        if input_attr:
+            weight_input = attr.get_attribute_input(weight_attr)
+            
+            if not weight_input:
+                
+                multiply_node = self._get_named_message_attribute('multiplyDivide1')
+                
+                pose_input = input_attr.split('.')[0]
+                
+                if not pose_input == multiply_node:
+                    
+                    self.set_input(input_attr)
         
         self._multiply_weight(blend_attr)
         
@@ -2765,7 +2740,6 @@ class PoseNoReader(PoseBase):
         Args:
             attribute (str): The node.attribute name of a connection to feed into the no reader.
         """
-        
         self.weight_input = attribute
         
         if not cmds.objExists('%s.weightInput' % self.pose_control):
@@ -2848,7 +2822,7 @@ class PoseNoReader(PoseBase):
         other_target_meshes = []
         input_meshes = {}
 
-        for inc in range(0, self._get_mesh_count()):
+        for inc in xrange(0, self._get_mesh_count()):
 
             mesh = self.get_mesh(inc)
             target_mesh = self.get_target_mesh(mesh)
@@ -3092,11 +3066,6 @@ class PoseCombo(PoseNoReader):
         
         self._connect_pose(pose_name)
         
-        pose_inst = get_pose_instance(pose_name, self.pose_gr)
-        
-        if pose_inst.get_type() == 'no reader':
-            pose_inst.set_weight(1)
-        
     def get_pose_index(self, pose):
         
         attributes = self._get_pose_string_attributes()
@@ -3127,8 +3096,6 @@ class PoseCombo(PoseNoReader):
         attribute = attributes[index]
         
         attr.disconnect_attribute('%s.%s' % (self.pose_control, attribute))
-        
-        cmds.setAttr('%s.pose%s' % (self.pose_control, (index+1)), '', type = 'string')
         
         self.refresh_multiply_connections()
         
@@ -3194,27 +3161,7 @@ class PoseCombo(PoseNoReader):
         self._show_meshes()
         
         return outputs
-
-    def set_weight(self, value):
-        """
-        Set the weight for no readers in the combo.
-        No readers have connections specified. 
-        If no connection is specified and connected, this can set the weight.
         
-        Args:
-            value (float): The value to set the weight to.
-        """
-        
-        poses = self.get_poses()
-        
-        for pose in poses:
-            pose_inst = get_pose_instance(pose, self.pose_gr)
-            if pose_inst:
-                pose_type = pose_inst.get_type()
-                
-                if pose_type == 'no reader':
-                    pose_inst.set_weight(value)
-            
 class PoseCone(PoseBase):
     """
     This type of pose reads from a joint or transform, for the defined angle of influence. 
@@ -3802,7 +3749,7 @@ class PoseCone(PoseBase):
                 
         count = self.get_mesh_count()
         
-        for inc in range(0, count):
+        for inc in xrange(0, count):
             mesh = self.get_mesh(inc)
             self.visibility_off(mesh, view_only = False)
         
@@ -3811,7 +3758,7 @@ class PoseCone(PoseBase):
         other_target_meshes = []
         input_meshes = {}
         
-        for inc in range(0, self._get_mesh_count()):
+        for inc in xrange(0, self._get_mesh_count()):
             
             mesh = self.get_mesh(inc)
             target_mesh = self.get_target_mesh(mesh)

@@ -1,15 +1,13 @@
 # Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
 
-from .. import ui_core
-from .. import attr
+from vtool.maya_lib import ui_core
+from vtool.maya_lib import attr
 
 from vtool import qt_ui, qt
 
 from vtool import util
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+import maya.cmds as cmds
 
 class Presets(qt_ui.BasicWidget):
     
@@ -221,7 +219,7 @@ class Preset_Settings(qt_ui.BasicWidget):
         
     def _item_renamed(self, old_name, new_name):
         
-        if not old_name in self.preset_attributes:
+        if not self.preset_attributes.has_key(old_name):
             self.export_needed.emit()
             return
         
@@ -238,7 +236,7 @@ class Preset_Settings(qt_ui.BasicWidget):
             
             current_text = item.text(0)
             
-            if current_text in self.preset_attributes:
+            if self.preset_attributes.has_key(current_text):
                 attribute_values = self.preset_attributes[current_text]
                 
                 for values in attribute_values:
@@ -310,7 +308,7 @@ class Preset_Settings(qt_ui.BasicWidget):
             
             preset_data = []
             
-            if preset_name in self.preset_attributes:
+            if self.preset_attributes.has_key(preset_name):
                 preset_data = self.preset_attributes[preset_name]
             
             presets += [[preset_name, preset_data]]

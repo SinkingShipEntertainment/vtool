@@ -1,19 +1,20 @@
 # Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
 
 import traceback
 
-from ... import qt_ui, qt
-from .. import ui_core
-from ... import util
+from vtool import qt_ui, qt
+from vtool.maya_lib import ui_core
+import vtool.util
 
-if util.is_in_maya():
+
+
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
     import maya.mel as mel
-
-from .. import core
-from .. import attr
-from .. import corrective
+    from vtool.maya_lib import core
+    from vtool.maya_lib import attr
+    from vtool.maya_lib import space
+    from vtool.maya_lib import corrective
     
 
 class PoseManager(ui_core.MayaWindowMixin):
@@ -265,7 +266,7 @@ class PoseListWidget(qt_ui.BasicWidget):
                     cmds.setAttr(inc_pose_attribute, 0)
                 except:
                     pass
-                    # util.warning('Could not set %s to 0.' % current_weight_attribute )
+                    # vtool.util.warning('Could not set %s to 0.' % current_weight_attribute )
 
         cmds.autoKeyframe(state=auto_key_state)
         
@@ -567,9 +568,9 @@ class PoseTreeWidget(BaseTreeWidget):
        
         self.header().setStretchLastSection(False)
         
-        if util.get_maya_version() < 2017:
+        if vtool.util.get_maya_version() < 2017:
             self.header().setResizeMode(0, self.header().Stretch)
-        if util.get_maya_version() >= 2017:
+        if vtool.util.get_maya_version() >= 2017:
             self.header().setSectionResizeMode(0, self.header().Stretch)
         
         self.last_selection = []
@@ -1084,7 +1085,7 @@ class PoseTreeWidget(BaseTreeWidget):
         
     def highlight_pose(self, pose_name):
         
-        poses = util.convert_to_sequence(pose_name)
+        poses = vtool.util.convert_to_sequence(pose_name)
         
         if not poses:
             self._remove_highlights() 
@@ -1126,17 +1127,6 @@ class PoseTreeWidget(BaseTreeWidget):
         if self.last_selection:
             if cmds.objExists(self.last_selection[0]): 
                 corrective.PoseManager().visibility_off(self.last_selection[0])
-                corrective.PoseManager().zero_out_blendshape_target_weights(self.last_selection[0])
-                last_pose_inst = corrective.PoseManager().get_pose_instance(self.last_selection[0])
-                last_pose_type = last_pose_inst.get_type()
-                if last_pose_type ==  'no reader' or last_pose_type == 'combo':
-                    last_pose_inst.set_weight(0)
-                
-                if pose_name:
-                    current_pose_inst = corrective.PoseManager().get_pose_instance(pose_name)
-                    current_pose_type = current_pose_inst.get_type() 
-                    if current_pose_type ==  'no reader' or current_pose_type == 'combo':
-                        current_pose_inst.set_weight(1)
 
         pose_names = self._get_selected_items(get_names=True)
         items = self._get_selected_items(get_names = False)
@@ -1146,11 +1136,6 @@ class PoseTreeWidget(BaseTreeWidget):
                 self._remove_current_item()
             
             corrective.PoseManager().set_pose(pose_names[0])
-            
-            current_pose_inst = corrective.PoseManager().get_pose_instance(pose_names[0])
-            current_pose_type = current_pose_inst.get_type() 
-            if current_pose_type ==  'no reader' or current_pose_type == 'combo':
-                current_pose_inst.set_weight(1)
         
         if pose_name and cmds.objExists(pose_name):
         
@@ -1651,7 +1636,7 @@ class SculptWidget(qt_ui.BasicWidget):
             
         except:
             
-            util.error(traceback.format_exc())
+            vtool.util.error(traceback.format_exc())
             
             self.button_sculpt.setEnabled(True)
             

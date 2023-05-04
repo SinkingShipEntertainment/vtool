@@ -1,12 +1,15 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import sys
 
-from vtool import qt_ui
+import qt_ui
+
+import util
+import util_file
 
 import script_manager.script_view as script_view
+
+
 
 def main(directory = None):
     

@@ -1,17 +1,17 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-
+import string
 import traceback
 import filecmp
 
-from .. import util
-from .. import util_file
-from .. import qt_ui, qt
-from .. import logger
+from vtool import util
+from vtool import util_file
+from vtool import qt_ui, qt
 
-from . import process
+import process
 
+from vtool import logger
+from __builtin__ import False
 log = logger.get_logger(__name__) 
 
 class ViewProcessWidget(qt_ui.EditFileTreeWidget):
@@ -1025,7 +1025,7 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
         
         names.reverse()
         
-        path = '/'.join(names)
+        path = string.join(names, '/')
         
         return path
         
@@ -1128,7 +1128,7 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
                             #still the case July 3rd,2020
                         
                         
-            next(iterator)
+            iterator.next()
         
         if self.progress_bar:
             self.progress_bar.reset()
@@ -1270,7 +1270,7 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
                 item_path = self.get_item_path_string(parent_item)
                 
                 if item_path:
-                    name = '/'.join([item_path, name])
+                    name = string.join([item_path, name], '/')
                     
                     if self._child_exists(name, parent_item):
                         return
@@ -1886,8 +1886,6 @@ class CopyWidget(qt_ui.BasicWidget):
         
         
         self.code_list.itemSelectionChanged.connect(self._code_selected)
-        self.data_list.itemSelectionChanged.connect(self._data_selected)
-        self.option_list.itemSelectionChanged.connect(self._option_selected)
         
         self.tabs.addTab(self.data_list, 'Data')
         self.tabs.addTab(self.code_list, 'Code')
@@ -1906,7 +1904,7 @@ class CopyWidget(qt_ui.BasicWidget):
         self.paste_button.clicked.connect(self._paste)
         cancel = qt.QPushButton('Cancel')
         
-        #self.paste_button.clicked.connect()
+        self.paste_button.clicked.connect(self.pasted)
         cancel.clicked.connect(self._cancelled)
         
         h_layout.addWidget(self.paste_button)
@@ -1983,12 +1981,12 @@ class CopyWidget(qt_ui.BasicWidget):
         
         self.populate_other()
         
-    def _thing_selected(self, list):
+    def _code_selected(self):
         
         if not self.update_on_select:
             return
         
-        selected = list.selectedItems()
+        selected = self.code_list.selectedItems()
         
         if not selected:
             return
@@ -2018,15 +2016,7 @@ class CopyWidget(qt_ui.BasicWidget):
         
         self.update_on_select = True
         
-    def _code_selected(self):
-        
-        self._thing_selected(self.code_list)
 
-    def _data_selected(self):
-        self._thing_selected(self.data_list)
-        
-    def _option_selected(self):
-        self._thing_selected(self.option_list)
         
     def _get_long_name(self, item):
         
@@ -2044,50 +2034,6 @@ class CopyWidget(qt_ui.BasicWidget):
             current_item = parent_item
         
         return name
-    
-    def _handle_option_parents(self, name, other_process):
-        
-        group = False
-        
-        if name.endswith('.'):
-            if name.count('.') == 1:
-                return name
-            
-            group = True
-            name = name[:-1]
-            
-            
-        
-        if name.find('.') == -1:
-            return name
-            return
-        
-        split_name = name.split('.')
-        name = split_name[-1]
-        split_name.reverse()
-        
-        accum = ''
-        parents = []
-        
-        for sub_name in split_name[1:]:
-            accum = (sub_name+'.') + accum
-            parents.append(accum)
-        
-        orig_name = name
-        
-        for parent in parents:
-        
-            if not other_process.has_option(parent):
-                continue
-            
-            name = parent + orig_name
-        
-        if group:
-            name += '.'
-        
-        return name
-        
-            
     
     def _get_option_long_name(self, item):
         
@@ -2190,10 +2136,6 @@ class CopyWidget(qt_ui.BasicWidget):
         
         source_data = self.process.get_data_instance(data_name)
         target_data = other_process.get_data_instance(data_name)
-        
-        if not source_data and not target_data:
-            if self.process.is_data_folder(data_name) and other_process.is_data_folder(data_name):
-                return True
         
         if not source_data:
             return
@@ -2351,8 +2293,6 @@ class CopyWidget(qt_ui.BasicWidget):
         
         
         self.progress_bar.hide()
-        
-        self.pasted.emit()
         
     def _paste_data(self):
         
@@ -2522,24 +2462,10 @@ class CopyWidget(qt_ui.BasicWidget):
         self.progress_bar.setRange(0, len(option_items))
         
         option_items = self._sort_option_items(option_items)
-            
-        last_item = None
-        
-        self.process._load_options()
-        options = self.process.get_options()
         
         for item in option_items:            
             
             long_name = self._get_option_long_name(item)
-            
-            sub_inc = 0
-            for option in options:
-                
-                if option[0] == long_name and sub_inc > 0:
-                    last_item = options[sub_inc-1][0]
-                    break
-                    
-                sub_inc += 1
             
             value = self.process.get_unformatted_option(long_name)
             
@@ -2547,94 +2473,27 @@ class CopyWidget(qt_ui.BasicWidget):
                 
                 other_process = self.other_processes[inc2]
                 
-                options = other_process.get_options()
-                
-                sub_inc = 0
-                for option in options:
-                    
-                    if option[0] == last_item:
-                        break
-                    
-                    sub_inc += 1
-                
-                long_name = self._handle_option_parents(long_name, other_process)
-                
                 other_process.set_option(long_name, value)
-                if sub_inc > 0:
-                    other_process.set_option_index(sub_inc+1, long_name)
                 
                 match = self._compare_option(self.process, other_process, long_name)
                 self._set_item_state(item, match, inc2+1)
             
             self.progress_bar.setValue(inc)
             inc+=1
-            
-            last_item = long_name
     
     def _sort_option_names(self, option_names):
         
         parents = []
         children = []
         
-        parents_dict = {}
-        
-        options = []
-        
         for option in option_names:
             
-            if option.find('.') == -1:
-                options.append(option)
-                
-            if option.find('.') > -1:
-                parent_part = option.split('.')
-                
-                if not option.endswith('.'):
-                    parent_part = '.'.join(parent_part[:-1]) + '.'
-                else:
-                    parent_part = '.'.join(parent_part[:-2]) + '.'
-                    
-                if not parent_part in parents_dict:
-                    parents_dict[parent_part] =[]
-                
-                if parent_part == '.':
-                    options.append(option)
-                    
-                else:
-                    parents_dict[parent_part].append(option)
-                    
-                    if not parent_part in parents:
-                        parents.append(parent_part)
-                        
-            if option.endswith('.') and not option in options:
-                if not option in parents:
-                    parents.append(option)
-        
-        if parents:
-            parent_depths = []
+            if option.find('.') > -1 and not option.endswith('.'):
+                children.append(option)
+            else:
+                parents.append(option)
             
-            for parent in parents:
-                depth = parent.count('.')
-                
-                parent_depths.append(depth)
-            
-            quick_sort = util.QuickSort(parent_depths)
-            quick_sort.set_follower_list(parents)
-            _, parents = quick_sort.run()
-        
-        for parent in parents:
-            
-            if not parent in options:
-                options.append(parent)
-            
-            if not parent in parents_dict:
-                continue
-            
-            children = parents_dict[parent]
-            
-            if not children:
-                continue
-            
-            options += children
+        options = parents + children 
         
         return options  
     
@@ -2653,8 +2512,7 @@ class CopyWidget(qt_ui.BasicWidget):
         found = []
         
         for name in options:
-            if name in option_item_dict:
-                found.append(option_item_dict[name])
+            found.append(option_item_dict[name])
         
         return found     
     
@@ -2672,8 +2530,7 @@ class CopyWidget(qt_ui.BasicWidget):
         found = []
         
         for option_name in option_names:
-            if option_name in options_dict:
-                found.append(options_dict[option_name])
+            found.append(options_dict[option_name])
             
         return found
           
@@ -2790,10 +2647,10 @@ class CopyWidget(qt_ui.BasicWidget):
                 if option_name.endswith('.'):
                     split_name = split_name[:-1]
                 
-                parent = '.'.join(split_name[:-1])
+                parent = string.join(split_name[:-1], '.')
                 parent += '.'
                 
-                if parent in parent_items:
+                if parent_items.has_key(parent):
                     
                     parent_item = parent_items[parent]
                     
@@ -2806,7 +2663,7 @@ class CopyWidget(qt_ui.BasicWidget):
             if type(option[1]) == list and len(option[1]) > 1:
                 test_option = option[1][1]
             
-            if option_name.endswith('.') and not option_name in parent_items:
+            if option_name.endswith('.') and not parent_items.has_key(option_name):
                 if test_option != 'reference.group':
                     parent_items[option_name] = item
                 
@@ -3293,7 +3150,7 @@ class CodeTree(ProcessInfoTree):
                 else:
                     long_name = name 
                 
-                if not long_name in items:
+                if not items.has_key(long_name):
                     item = self.add_item(column, name, parent_item)
                 else:
                     item = items[long_name]
@@ -3329,7 +3186,7 @@ class CodeVersionTree(ProcessInfoTree, VersionInfoTree):
                 else:
                     long_name = name 
                 
-                if not long_name in items:
+                if not items.has_key(long_name):
                     item = self.add_item(column, name, parent_item)
                 else:
                     item = items[long_name]

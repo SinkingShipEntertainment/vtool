@@ -1,14 +1,13 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
+import vtool.util
+import api
 
-from .. import util
-from . import api
-from . import core
-from . import attr
-
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
+    
+import core
+import attr
 
 def bake_to_animation(nodes, min_time = None, max_time = None):
     """

@@ -1,18 +1,18 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
 
 import traceback
 import random
+import string
+
+import vtool.util
+import api
+
+import core
+import attr
 import math
 
-from .. import util
-from . import api
-from . import core
-from . import attr
-from .. import util_math
-
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
     import maya.api.OpenMaya as om
     core.load_plugin('matrixNodes')
@@ -125,7 +125,7 @@ class VertexOctreeNode(object):
         
     def _create_child(self, min_value, max_value, verts):
         
-        mid_point = util.get_midpoint(min_value, max_value)
+        mid_point = vtool.util.get_midpoint(min_value, max_value)
         
         bounding_box = min_value + max_value + mid_point
         
@@ -245,7 +245,7 @@ class VertexOctreeNode(object):
                     return child
                     
                 if child.has_children():
-                    distance = util.get_distance(child.center, three_number_list)            
+                    distance = vtool.util.get_distance(child.center, three_number_list)            
                 
                     if distance < 0.001:
                         return child
@@ -445,7 +445,7 @@ class MatchSpace(object):
     def _set_world_scale_pivot(self, scale_pivot_vector = []):
         if not scale_pivot_vector:
             scale_pivot_vector = self._get_world_scale_pivot()
-        cmds.xform(self.target_transform, sp = scale_pivot_vector, ws = True)
+        cmds.xform(self.target_transform, rp = scale_pivot_vector, ws = True)
         
     def translation(self):
         """
@@ -759,7 +759,7 @@ class IkHandle(object):
             self.name = core.inc_name('ikHandle')
         
         if not name.startswith('ikHandle'):
-            self.name = core.inc_name('ikHandle_%s' % name)
+            self.name = 'ikHandle_%s' % name
         
         
             
@@ -911,10 +911,6 @@ class OrientJoint(object):
         self.up_vector = [0,1,0]
         self.world_up_vector = [0,1,0]
         
-        self._custom_aim_vector = False
-        self._custom_up_vector = False
-        self._custom_world_up_vector = False
-        
         self.aim_at = 3
         self.aim_up_at = 0
         
@@ -992,7 +988,6 @@ class OrientJoint(object):
     def _parent(self):
         
         if self.children:
-            
             cmds.parent(self.children, self.joint)
         
         
@@ -1081,7 +1076,7 @@ class OrientJoint(object):
                 child_aim = self._get_position_group(self.child)
             
             if not self.child:
-                util.warning('Orient is set to aim at child, but %s has no child.' % self.joint_nice)
+                vtool.util.warning('Orient is set to aim at child, but %s has no child.' % self.joint_nice)
             
             return child_aim
             
@@ -1109,7 +1104,7 @@ class OrientJoint(object):
                 self.up_space_type = 'object'
                 
             if not self.child or not cmds.objExists(self.child):
-                util.warning('Child specified as up in orient attributes but %s has no child.' % self.joint_nice)
+                vtool.util.warning('Child specified as up in orient attributes but %s has no child.' % self.joint_nice)
                 
             
             return child_group
@@ -1127,7 +1122,7 @@ class OrientJoint(object):
             
             if not top or not mid or not btm:
                 
-                util.warning('Could not orient %s fully with current triangle plane settings.' % self.joint_nice)
+                vtool.util.warning('Could not orient %s fully with current triangle plane settings.' % self.joint_nice)
                 return
             
             plane_group = get_group_in_plane(top, mid, btm)
@@ -1146,7 +1141,7 @@ class OrientJoint(object):
                 self.up_space_type = 'object'
             
             if not self.child2 or not cmds.objExists(self.child2):
-                util.warning('Child 2 specified as up in orient attributes but %s has no 2nd child.' % self.joint_nice)
+                vtool.util.warning('Child 2 specified as up in orient attributes but %s has no 2nd child.' % self.joint_nice)
             return child_group
         
         if index == 6:
@@ -1156,7 +1151,6 @@ class OrientJoint(object):
             space_group = None
                         
             if not self.surface:
-                util.warning('Asked to orient to surface, but no surface given.')
                 return space_group
                 
             self.up_space_type = 'object'
@@ -1287,9 +1281,9 @@ class OrientJoint(object):
         try:
             cmds.makeIdentity(self.joint, apply = True, r = True, s = scale)
         except:
-            util.error(traceback.format_exc())
+            vtool.util.error(traceback.format_exc())
             basename = core.get_basename(self.joint)
-            util.warning('Could not freeze %s when trying to orient.' % basename)
+            vtool.util.warning('Could not freeze %s when trying to orient.' % basename)
 
         """
         if children:
@@ -1306,7 +1300,7 @@ class OrientJoint(object):
             return
         
         #if self.children:
-        #    util.warning('Orient Joints inverted scale only permitted on joints with no children. Skipping scale change on %s' % core.get_basename(self.joint))
+        #    vtool.util.warning('Orient Joints inverted scale only permitted on joints with no children. Skipping scale change on %s' % core.get_basename(self.joint))
         #    return
         
         if invert_scale == 1:
@@ -1344,7 +1338,6 @@ class OrientJoint(object):
             If up needs to be opposite of X axis then vector should be [-1,0,0].
         """
         self.aim_vector = vector_list
-        self._custom_aim_vector = True
         
     def set_up_vector(self, vector_list):
         """
@@ -1354,7 +1347,6 @@ class OrientJoint(object):
             If up needs to be opposite of X axis then vector should be [-1,0,0].
         """
         self.up_vector = vector_list
-        self._custom_up_vector = True
         
     def set_world_up_vector(self, vector_list):
         """
@@ -1364,7 +1356,6 @@ class OrientJoint(object):
             If up needs to be opposite of X axis then vector should be [-1,0,0].
         """
         self.world_up_vector = vector_list
-        self._custom_world_up_vector = True
         
     def set_aim_at(self, int_value):
         """
@@ -1416,10 +1407,11 @@ class OrientJoint(object):
     def set_invert_scale(self, axis_letters):
         self.invert_scale = axis_letters
     
-    #@core.viewport_off
     def run(self):
+        
         self._get_relatives()
         self.orient_values = self._get_values()
+        
         
         self.has_grand_child = False
         if self.children:
@@ -1438,25 +1430,22 @@ class OrientJoint(object):
         
         #self._pin()
         
-        util.show('Orienting %s' % core.get_basename(self.joint))
+        vtool.util.show('Orienting %s' % core.get_basename(self.joint))
         
         try:
             cmds.setAttr('%s.rotateAxisX' % self.joint, 0)
             cmds.setAttr('%s.rotateAxisY' % self.joint, 0)
             cmds.setAttr('%s.rotateAxisZ' % self.joint, 0)
         except:
-            util.show('Could not zero out rotateAxis on %s. This may cause rig errors.' % self.joint_nice)
+            vtool.util.show('Could not zero out rotateAxis on %s. This may cause rig errors.' % self.joint_nice)
         
         
         
         if self.orient_values:
         
-            if not self._custom_aim_vector:
-                self.aim_vector = self._get_vector_from_axis( self.orient_values['aimAxis'] )
-            if not self._custom_up_vector:
-                self.up_vector = self._get_vector_from_axis(self.orient_values['upAxis'])
-            if not self._custom_world_up_vector:
-                self.world_up_vector = self._get_vector_from_axis( self.orient_values['worldUpAxis'])
+            self.aim_vector = self._get_vector_from_axis( self.orient_values['aimAxis'] )
+            self.up_vector = self._get_vector_from_axis(self.orient_values['upAxis'])
+            self.world_up_vector = self._get_vector_from_axis( self.orient_values['worldUpAxis'])
             
             self.aim_at = self._get_aim_at(self.orient_values['aimAt'])
             self.aim_up_at = self._get_aim_up_at(self.orient_values['aimUpAt'])
@@ -1479,7 +1468,7 @@ class OrientJoint(object):
             if not self.has_grand_child:
                 self._invert_scale()
             else:
-                util.warning('Inverse scale has issues with orienting chains with more than just one child. Skipping for joint: %s' % self.joint_nice)
+                vtool.util.warning('Inverse scale has issues with orienting chains with more than just one child. Skipping for joint: %s' % self.joint_nice)
                 
         
         self._cleanup()
@@ -1490,24 +1479,22 @@ class OrientJoint(object):
             if self.child and not self.has_grand_child:
                 cmds.makeIdentity(self.child, r = True, jo = True, s = True, apply = True)
         
-        
 
-class BoundingBox(util.BoundingBox):
+class BoundingBox(vtool.util.BoundingBox):
     """
     Convenience for dealing with bounding boxes.
     
     Args:
         thing (str): The name of a transform in maya. Bounding box info is automatically loaded from the transform.
     """
-    def __init__(self, thing, ignore_invisible = False):
+    def __init__(self, thing):
         
         self.thing = thing
         
-        xmin, ymin, zmin, xmax, ymax, zmax = cmds.exactWorldBoundingBox(self.thing, ii = ignore_invisible)
+        xmin, ymin, zmin, xmax, ymax, zmax = cmds.exactWorldBoundingBox(self.thing)
         
         super(BoundingBox, self).__init__([xmin, ymin, zmin], 
                                           [xmax, ymax, zmax])
-        
 
 class AttachJoints(object):
     """
@@ -1616,13 +1603,9 @@ class DuplicateHierarchy(object):
         self.only_these_transforms = None
         self._only_joints = False
         
-        self._remove_user_attrs = True
-        self._prefix = ''
-        self._suffix = ''
-        
             
     def _get_children(self, transform):
-        children = cmds.listRelatives(transform, children = True, path = True, type = 'transform', f = True)
+        children = cmds.listRelatives(transform, children = True, path = True, type = 'transform')
         found = []
         
         if children:
@@ -1641,20 +1624,14 @@ class DuplicateHierarchy(object):
     def _duplicate(self, transform):
         
         new_name = transform
-        new_name = core.get_basename(new_name)
         
         if self.replace_old and self.replace_new:
-            new_name = new_name.replace(self.replace_old, self.replace_new)
-            
-        if self._prefix:
-            new_name = self._prefix + new_name
-        if self._suffix:
-            new_name = new_name + self._suffix
+            new_name = transform.replace(self.replace_old, self.replace_new)
+            new_name = core.get_basename(new_name)
         
         duplicate = cmds.duplicate(transform, po = True)[0]
         
-        if self._remove_user_attrs:
-            attr.remove_user_defined(duplicate)
+        attr.remove_user_defined(duplicate)
         
         duplicate = cmds.rename(duplicate, core.inc_name(new_name))
         
@@ -1664,9 +1641,7 @@ class DuplicateHierarchy(object):
     
     def _duplicate_hierarchy(self, transform, parent = None):
         
-        base_transform = core.get_basename(transform)
-        
-        if base_transform == self.stop_at_transform:
+        if transform == self.stop_at_transform:
             self.stop = True
         
         if self.stop:
@@ -1682,19 +1657,14 @@ class DuplicateHierarchy(object):
             
             for child in children:
                 
-                child_basename = core.get_basename(child)
-                
-                if self.only_these_transforms and not child_basename in self.only_these_transforms:
+                if self.only_these_transforms and not child in self.only_these_transforms:
                     
                     sub_children = self._get_children(child)
                     
                     if sub_children:
                         
                         for sub_child in sub_children:
-                            
-                            sub_child_basename = core.get_basename(sub_child)
-                            
-                            if not sub_child_basename in self.only_these_transforms:
+                            if not sub_child in self.only_these_transforms:
                                 continue
                             
                             duplicate = self._duplicate_hierarchy(sub_child, parent )
@@ -1748,12 +1718,6 @@ class DuplicateHierarchy(object):
         if relative:
             self.stop_at_transform = relative[0]
         
-    def add_prefix(self, prefix):
-        self._prefix = prefix
-        
-    def add_suffix(self, suffix):
-        self._suffix = suffix
-        
     def replace(self, old, new):
         """
         Replace the naming in the duplicate.
@@ -1764,15 +1728,13 @@ class DuplicateHierarchy(object):
         """
         self.replace_old = old
         self.replace_new = new
-    
-    def remove_user_attrs_on_duplicate(self, bool_value):
-        self._remove_user_attrs = bool_value
-    
+        
     def create(self):
         """
         Create the duplicate hierarchy.
         """
-        core.refresh()
+        cmds.refresh()
+        
         self._duplicate_hierarchy(self.top_transform)
         
         return self.duplicates
@@ -1985,7 +1947,7 @@ class MatrixConstraintNodes(object):
         self.connect_rotate = True
         self.connect_scale = True
         
-        self.source = util.convert_to_sequence(source_transform)
+        self.source = vtool.util.convert_to_sequence(source_transform)
         self.target = target_transform
         
         self._decompose = True
@@ -2215,7 +2177,7 @@ class SpaceSwitch(MatrixConstraintNodes):
                 else:
                     switch_names = self._switch_names
                             
-                switch_string = ':'.join(switch_names)
+                switch_string = string.join(switch_names, ':')
                     
                 if not cmds.objExists(self._input_attribute):
                     node, attribute = attr.get_node_and_attribute(self._input_attribute)
@@ -2596,7 +2558,7 @@ def zero_out_transform_channels(transform):
     Zero out the translate and rotate on a transform.
     """
     
-    transforms = util.convert_to_sequence(transform)
+    transforms = vtool.util.convert_to_sequence(transform)
     
     
     for thing in transforms:
@@ -2681,7 +2643,7 @@ def get_center(transform):
         vector list:  The center vector, eg [0,0,0]
     """
     
-    list = util.convert_to_sequence(transform)
+    list = vtool.util.convert_to_sequence(transform)
     
     components = []
     
@@ -2903,7 +2865,7 @@ def get_midpoint( source, target):
                                 worldSpace = True, 
                                 t = True)
     
-    return util.get_midpoint(vector1, vector2)
+    return vtool.util.get_midpoint(vector1, vector2)
 
 def get_distances(sources, target):
     """
@@ -3114,7 +3076,7 @@ def get_axis_vector(transform, axis_vector):
 
 def get_axis_aimed_at_child(transform):
     
-    children = cmds.listRelatives(transform, type = 'joint')
+    children = cmds.listRelatives(transform, type = 'transform')
     
     if not children:
         return
@@ -3122,7 +3084,7 @@ def get_axis_aimed_at_child(transform):
     pos1 = cmds.xform(transform, q = True, ws = True, t = True)
     pos2 = cmds.xform(children[0], q = True, ws = True, t = True)
     
-    pos2 = util.vector_sub(pos2, pos1)
+    pos2 = vtool.util.vector_sub(pos2, pos1)
     
     all_axis = [[1,0,0], [-1,0,0], [0,1,0], [0,-1,0], [0,0,1], [0,0,-1]]
     
@@ -3132,13 +3094,13 @@ def get_axis_aimed_at_child(transform):
     
     for axis in all_axis:
         axis_vector = get_axis_vector(transform, axis_vector = axis)
-        axis_vector = util.vector_sub(axis_vector, pos1)
+        axis_vector = vtool.util.vector_sub(axis_vector, pos1)
         
-        vector1 = util.Vector(axis_vector)
-        vector2 = util.Vector(pos2)
+        vector1 = vtool.util.Vector(axis_vector)
+        vector2 = vtool.util.Vector(pos2)
         
         
-        result = util.get_dot_product(vector1, vector2)
+        result = vtool.util.get_dot_product(vector1, vector2)
         
         if result > current_result:
             good_axis = axis
@@ -3356,7 +3318,7 @@ def create_follow_group(source_transform, target_transform, prefix = 'follow', f
     
     parent = cmds.listRelatives(target_transform, p = True, f = True)
     
-    target_name = util.convert_to_sequence(target_transform) 
+    target_name = vtool.util.convert_to_sequence(target_transform) 
     
     name = '%s_%s' % (prefix, target_name[0])
     
@@ -3516,7 +3478,7 @@ def create_multi_follow(source_list, target_transform, node = None, constraint_t
     locators = []
     
     if len(source_list) < 2:
-        util.warning('Cannot create multi follow with less than 2 source transforms.')
+        vtool.util.warning('Cannot create multi follow with less than 2 source transforms.')
         return
     
     follow_group = create_xform_group(target_transform, 'follow')
@@ -4048,7 +4010,7 @@ def subdivide_joint(joint1 = None, joint2 = None, count = 1, prefix = 'joint', n
         
     for inc in range(0, count):
         
-        position = util.get_inbetween_vector(vector1, vector2, value)
+        position = vtool.util.get_inbetween_vector(vector1, vector2, value)
         
         cmds.select(cl = True)
         joint = cmds.joint( p = position, n = core.inc_name(name), r = radius)
@@ -4109,7 +4071,7 @@ def orient_attributes(scope = None, initialize_progress = True, hierarchy = True
     
     if initialize_progress:
         
-        watch = util.StopWatch()
+        watch = vtool.util.StopWatch()
         watch.start('Orienting Joints')
         
         count = len(cmds.ls(type = 'joint'))
@@ -4123,7 +4085,7 @@ def orient_attributes(scope = None, initialize_progress = True, hierarchy = True
         
         if cmds.objExists('%s.active' % transform):
             if not cmds.getAttr('%s.active' % transform):
-                util.warning('%s has orientation attributes but is not active.  Skipping.' % transform)
+                vtool.util.warning('%s has orientation attributes but is not active.  Skipping.' % transform)
                 continue
         
         progress_bar.status('Orienting: %s of %s   %s' % (progress_bar.get_current_inc(), progress_bar.get_count(), core.get_basename(transform)))
@@ -4163,7 +4125,7 @@ def orient_attributes_all():
     
     scope = cmds.ls(type = 'transform', l = True)
         
-    watch = util.StopWatch()
+    watch = vtool.util.StopWatch()
     watch.start('Orienting Joints')
     
     count = len(scope)
@@ -4181,7 +4143,7 @@ def orient_attributes_all():
         
         if cmds.objExists('%s.active' % transform):
             if not cmds.getAttr('%s.active' % transform):
-                util.warning('%s has orientation attributes but is not active.  Skipping.' % transform)
+                vtool.util.warning('%s has orientation attributes but is not active.  Skipping.' % transform)
                 continue
         
         progress_bar.status('Orienting: %s of %s   %s' % (progress_bar.get_current_inc(), progress_bar.get_count(), core.get_basename(transform)))
@@ -4202,253 +4164,6 @@ def orient_attributes_all():
     watch.end()
                 
     return oriented
-
-def auto_generate_orient_attributes(joint, align_forward = 'Z', align_up = 'Y'):
-    
-    if align_forward == align_up:
-        core.print_warning('Align forward axis cannot be the same as align up axis.')
-        return
-    hier = core.get_hierarchy(joint)
-    
-    hier.insert(0, joint)
-    
-    hier_children = {}
-    attr_inst = {}
-    
-    forward_align, up_align = get_orient_attribute_default_alignment(align_forward, align_up)
-    if align_forward == 'X':
-        forward_orig_align = 0
-    if align_forward == 'Y':
-        forward_orig_align = 1
-    if align_forward == 'Z':
-        forward_orig_align = 2        
-
-    for joint in hier:
-        long_joint_name = cmds.ls(joint, l = True)[0]
-
-        orient_attr = attr.OrientJointAttributes(joint)
-        
-        parent = cmds.listRelatives(joint, parent = True, type = 'joint', f = True)
-        if parent:
-            parent = parent[0]
-        children = cmds.listRelatives(joint, type = 'joint', f = True)
-        
-        attr_inst[long_joint_name] = orient_attr
-        
-        has_world_up = 1
-        last_children = None
-        if parent in hier_children:
-            last_children = hier_children[parent]
-        
-        if parent:
-            lives_in_parent = 1
-            has_world_up = 6
-            
-            
-            if last_children and len(last_children) > 1:
-                has_world_up = 1
-                lives_in_parent = 0
-
-        else:
-            lives_in_parent = 0
-        
-        if joint == hier[0]:
-            lives_in_parent = 0
-        
-        if not lives_in_parent:
-            forward_align, up_align = get_orient_attribute_default_alignment(align_forward, align_up)
-            has_world_up = 1        
-        
-        hier_children[long_joint_name] = children
-        
-        world = True
-        local_parent = False
-        
-        if children and len(children) == 1:
-            world = False
-        
-        if children and len(children) > 1:
-            world = False
-            local_parent = True
-        
-        if not parent:
-            world = True
-        
-        if parent and not children:
-            world = False
-            local_parent = True
-        
-        if world:
-
-            orient_attr.attributes[0].set_value(forward_align)
-            orient_attr.attributes[1].set_value(up_align)
-            orient_attr.attributes[2].set_value(has_world_up)
-            orient_attr.attributes[3].set_value(0)
-            orient_attr.attributes[4].set_value(lives_in_parent)
-            orient_attr.attributes[5].set_value(2)
-            orient_attr.attributes[6].set_value(3)
-            orient_attr.attributes[7].set_value(4)
-            orient_attr.attributes[8].set_value(0)
-            orient_attr.attributes[9].set_value(1)
-         
-        if not world:
-
-            forward_alt_align = get_alt_forward_alignment(align_forward, align_up)
-
-            new_up_align = up_align
-            
-            if children and lives_in_parent != 1:
-                print('here2')
-                #handle up
-                vector_joint = cmds.xform(joint, ws = True, q = True, t = True)
-                vector_child = cmds.xform(children[0], ws = True, q = True, t = True)
-                
-                vector_aim = util_math.vector_sub(vector_child,vector_joint)
-                vector_aim = util_math.vector_normalize(vector_aim)
-                
-                up_angle = util_math.angle_between(vector_aim,[0,1,0],in_degrees = True)
-                
-                switch_up = False
-                forward_angle = util_math.angle_between(vector_aim,[0,0,1],in_degrees = True)
-                if forward_angle < 60:
-                    forward_align = get_alt_forward_alignment(align_forward, align_up)
-                    
-                    test_align_forward = forward_align
-                    if forward_align > 2:
-                        test_align_forward -= 3
-                    flip = False
-                    
-                    if up_align == 0 and test_align_forward == 2:
-                        flip = True 
-                    
-                    if up_align == 1 and test_align_forward == 0:
-                        flip = True 
-                    
-                    if up_align == 2 and test_align_forward == 1:
-                        flip = True 
-                    
-                    if flip:
-                        if forward_align > 2:
-                            forward_align -= 3
-                        elif forward_align < 3:
-                            forward_align += 3
-                
-                if forward_angle > 120:
-                    forward_align = forward_alt_align
-                    
-                    test_align_forward = forward_align
-                    if forward_align > 2:
-                        test_align_forward -= 3
-                    flip = False
-                    
-                    if up_align == 0 and test_align_forward == 1:
-                        flip = True 
-                    
-                    if up_align == 1 and test_align_forward == 2:
-                        flip = True 
-                    
-                    if up_align == 2 and test_align_forward == 0:
-                        flip = True
-                    
-                    if flip:
-                        if forward_align > 2:
-                            forward_align -= 3
-                        elif forward_align < 3:
-                            forward_align += 3
-
-                if up_angle <= 50:
-                    if forward_align < 3:
-                        forward_align += 3
-                    elif forward_align > 2:
-                        forward_align -= 3
-                    temp = up_align
-                    up_align = forward_align
-                    forward_align = temp
-                    
-                    switch_up = True
-                
-                if up_angle >= 130:
-                    temp = up_align
-                    up_align = forward_align
-                    forward_align = temp
-                    if temp < 3:
-                        forward_align = temp + 3
-                    if temp >= 3:
-                        forward_align = temp - 3
-                    switch_up = True
-                
-                new_up_align = up_align
-                
-                if switch_up:
-                    has_world_up = 2
-                    new_up_align = forward_orig_align
-                
-            orient_attr.attributes[0].set_value(forward_align)
-            orient_attr.attributes[1].set_value(new_up_align)
-            orient_attr.attributes[2].set_value(has_world_up)
-            orient_attr.attributes[3].set_value(3)
-            orient_attr.attributes[4].set_value(lives_in_parent)
-            orient_attr.attributes[5].set_value(2)
-            orient_attr.attributes[6].set_value(3)
-            orient_attr.attributes[7].set_value(4)
-            orient_attr.attributes[8].set_value(0)
-            orient_attr.attributes[9].set_value(1)
-            
-            if lives_in_parent:
-                orient_attr.attributes[1].set_value(1)
-            
-            if local_parent:
-                
-                orient_attr.attributes[0].set_value(0)
-                orient_attr.attributes[3].set_value(5)
-
-def get_orient_attribute_default_alignment(forward_axis = 'Z', up_axis = 'Y'):
-    
-    align = forward_axis + up_axis
-    
-    foward_align = 0
-    up_align = 1
-    
-    if align == 'XY':
-        forward_align = 5
-        up_align = 1
-    if align == 'XZ':
-        forward_align = 1
-        up_align = 2
-    if align == 'YZ':
-        forward_align = 3
-        up_align = 2
-    if align == 'YX':
-        forward_align = 2
-        up_align = 0
-    if align == 'ZX':
-        forward_align = 4
-        up_align = 0
-    if align == 'ZY':
-        forward_align = 0
-        up_align = 1
-        
-    return forward_align, up_align  
-
-def get_alt_forward_alignment(forward_axis = 'Z', up_axis = 'Y'):
-    align = forward_axis + up_axis
-    
-    if align == 'XY':
-        return 3
-    if align == 'XZ':
-        return 0
-    if align == 'YZ':
-        return 4
-    if align == 'YX':
-        return 1
-    if align == 'ZX':
-        return 5
-    if align == 'ZY':
-        return 2
-    
-def mirror_orient_attributes():
-    pass
-    
 def add_orient_joint(joint):
     """
     Add orient joint. This will create an up and an aim joint.
@@ -4501,17 +4216,12 @@ def add_orient_joint(joint):
     cmds.setAttr('%s.aimUpAt' % joint, 5)
     
 
-def orient_x_to_child_up_to_surface(joint, invert = False, surface = None, neg_aim = False):
-    
-    aim_value = 1
-    if neg_aim:
-        aim_value = -1
-        
-    aim_axis = [aim_value,0,0]
+def orient_x_to_child_up_to_surface(joint, invert = False, surface = None):
+    aim_axis = [1,0,0]
     up_axis = [0,1,0]
     
     if invert:
-        aim_axis = [aim_value*-1,0,0]
+        aim_axis = [-1,0,0]
         up_axis = [0,-1,0]
     
     children = cmds.listRelatives(joint, type = 'transform')
@@ -4529,7 +4239,7 @@ def orient_x_to_child_up_to_surface(joint, invert = False, surface = None, neg_a
     if not children:
         cmds.makeIdentity(joint, jo = True, apply = True)
         
-def orient_x_to_child(joint, invert = False, neg_aim = False, parent_rotate = False):
+def orient_x_to_child(joint, invert = False):
     """
     Helper function to quickly orient a joint to its child.
     
@@ -4537,25 +4247,16 @@ def orient_x_to_child(joint, invert = False, neg_aim = False, parent_rotate = Fa
         joint (str): The name of the joint to orient. Must have a child.
         invert (bool): Wether to mirror the orient for right side.
     """
-    aim_value = 1
-    if neg_aim:
-        aim_value = -1
-    
-    aim_axis = [aim_value,0,0]
+    aim_axis = [1,0,0]
     up_axis = [0,1,0]
     
     if invert:
-        aim_axis = [aim_value*-1,0,0]
+        aim_axis = [-1,0,0]
         up_axis = [0,-1,0]
     
     children = cmds.listRelatives(joint, type = 'transform')
     
-    parent = cmds.listRelatives(joint, p = True)
-    
-    if not parent_rotate:
-        parent = None
-    
-    if children and not parent:
+    if children:
     
         orient = OrientJoint(joint, children)
         orient.set_aim_at(3)
@@ -4563,19 +4264,9 @@ def orient_x_to_child(joint, invert = False, neg_aim = False, parent_rotate = Fa
         orient.set_aim_vector(aim_axis)
         orient.set_up_vector(up_axis)
         orient.run()
-    
-    if children and parent:
-        orient = OrientJoint(joint, children)
-        orient.set_aim_at(3)
-        orient.set_aim_up_at(1)
-        orient.set_aim_vector(aim_axis)
-        orient.set_up_vector([0,0,0])
-        orient.run()
-        
-    if not children:
-        cmds.makeIdentity(joint, jo = True, apply = True)
 
-def orient_y_to_child(joint, invert = False, neg_aim = False, up_axis = [0,0,1]):
+
+def orient_y_to_child(joint, invert = False):
     """
     Helper function to quickly orient a joint to its child.
     
@@ -4583,74 +4274,12 @@ def orient_y_to_child(joint, invert = False, neg_aim = False, up_axis = [0,0,1])
         joint (str): The name of the joint to orient. Must have a child.
         invert (bool): Wether to mirror the orient for right side.
     """
-    
-    aim_value = 1
-    if neg_aim:
-        aim_value = -1
-    
-    aim_axis = [0,aim_value,0]
+    aim_axis = [0,1,0]
+    up_axis = [0,0,1]
     
     if invert:
-        aim_axis = [0,aim_value*-1,0]
-        
-        values = []
-        
-        for value in up_axis:
-            if value != 0:
-                value *= -1
-            values.append(value)
-        up_axis = values
-    
-    world_up_axis = [1,0,0]
-    
-    children = cmds.listRelatives(joint, type = 'transform')
-    
-    parent = cmds.listRelatives(joint, type = 'joint')
-    
-    if children:
-    
-        if not parent:
-            orient = OrientJoint(joint, children)
-            orient.set_aim_at(3)
-            orient.set_aim_up_at(0)
-            orient.set_aim_vector(aim_axis)
-            orient.set_up_vector(up_axis)
-            orient.set_world_up_vector(world_up_axis)
-            orient.run()
-        if parent:
-            
-            orient = OrientJoint(joint, children)
-            orient.set_aim_at(3)
-            orient.set_aim_up_at(1)
-            orient.set_aim_vector(aim_axis)
-            orient.set_up_vector([0,1,0])
-            orient.set_world_up_vector([0,0,0])
-            orient.run()
-            
-
-    if not children:
-        cmds.makeIdentity(joint, jo = True, apply = True)
-
-
-def orient_z_to_child(joint, invert = False, neg_aim = False):
-    """
-    Helper function to quickly orient a joint to its child.
-    
-    Args:
-        joint (str): The name of the joint to orient. Must have a child.
-        invert (bool): Wether to mirror the orient for right side.
-    """
-    
-    aim_value = 1
-    if neg_aim:
-        aim_value = -1
-    
-    aim_axis = [0,0,aim_value]
-    up_axis = [0,1,0]
-    
-    if invert:
-        aim_axis = [0,0,aim_value*-1]
-        up_axis = [0,-1,0]
+        aim_axis = [0,-1,0]
+        up_axis = [0,0,-1]
     
     children = cmds.listRelatives(joint, type = 'transform')
     
@@ -4666,6 +4295,8 @@ def orient_z_to_child(joint, invert = False, neg_aim = False):
     if not children:
         cmds.makeIdentity(joint, jo = True, apply = True)
 
+    if not children:
+        cmds.makeIdentity(joint, jo = True, apply = True)
 
 def find_transform_right_side(transform, check_if_exists = True):
     """
@@ -4687,7 +4318,7 @@ def find_transform_right_side(transform, check_if_exists = True):
     
     if transform.endswith('_L'):
         
-        other = util.replace_string_at_end(transform, '_L', '_R')
+        other = vtool.util.replace_string_at_end(transform, '_L', '_R')
         
         if cmds.objExists(other) and check_if_exists:
             return other
@@ -4699,7 +4330,7 @@ def find_transform_right_side(transform, check_if_exists = True):
     
     if transform.endswith('_l'):
         
-        other = util.replace_string_at_end(transform, '_l','_r')
+        other = vtool.util.replace_string_at_end(transform, '_l','_r')
         
         if cmds.objExists(other) and check_if_exists:
             return other
@@ -4711,7 +4342,7 @@ def find_transform_right_side(transform, check_if_exists = True):
         
     if transform.startswith('L_') and not transform.endswith('_R'):
         
-        other = util.replace_string_at_start(transform, 'L_', 'R_')
+        other = vtool.util.replace_string_at_start(transform, 'L_', 'R_')
         
         if cmds.objExists(other) and check_if_exists:
             return other 
@@ -4755,15 +4386,8 @@ def find_transform_right_side(transform, check_if_exists = True):
             return other
         if not check_if_exists:
             return other
-          
-    if transform.find('_L_') > -1:
-        other = transform.replace('_L_', '_R_')
-        if cmds.objExists(other) and check_if_exists:
-            return other
-        if not check_if_exists:
-            return other
-    
-    other = ''
+                
+        
     
     return ''
 
@@ -4787,7 +4411,7 @@ def find_transform_left_side(transform,check_if_exists = True):
     
     if transform.endswith('_R'):
         
-        other = util.replace_string_at_end(transform, '_R', '_L')
+        other = vtool.util.replace_string_at_end(transform, '_R', '_L')
         
         if cmds.objExists(other) and check_if_exists:
             return other
@@ -4798,7 +4422,7 @@ def find_transform_left_side(transform,check_if_exists = True):
     
     if transform.endswith('_r'):
         
-        other = util.replace_string_at_end(transform, '_r','_l')
+        other = vtool.util.replace_string_at_end(transform, '_r','_l')
         
         if cmds.objExists(other) and check_if_exists:
             return other
@@ -4810,7 +4434,7 @@ def find_transform_left_side(transform,check_if_exists = True):
         
     if transform.startswith('R_') and not transform.endswith('_L'):
         
-        other = util.replace_string_at_start(transform, 'R_', 'L_')
+        other = vtool.util.replace_string_at_start(transform, 'R_', 'L_')
         
         if cmds.objExists(other) and check_if_exists:
             return other 
@@ -4857,8 +4481,6 @@ def find_transform_left_side(transform,check_if_exists = True):
 
     return ''
 
-
-
 def mirror_toggle(transform, bool_value):
     
     if not cmds.objExists('%s.mirror' % transform):
@@ -4867,7 +4489,7 @@ def mirror_toggle(transform, bool_value):
     cmds.setAttr('%s.mirror' % transform, bool_value)
     
 
-def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_missing = False, transforms = [], left_to_right = True, skip_meshes = True):
+def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_missing = False, transforms = [], left_to_right = True):
     """
     Mirror the positions of all transforms that match the search strings.
     If search strings left at None, search all transforms and joints. 
@@ -4943,9 +4565,8 @@ def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_m
         if core.is_referenced(transform):
             continue
         
-        if skip_meshes:
-            if cmds.objExists('%s.inMesh' % transform):
-                continue
+        if cmds.objExists('%s.inMesh' % transform):
+            continue
         
         #if cmds.objExists('%s.nearClipPlane' % transform):
         #    continue
@@ -5019,7 +4640,7 @@ def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_m
             if cmds.objExists('%s.mirror' % other):
                 mirror = cmds.getAttr('%s.mirror' % other)
                 if not mirror:
-                    util.show('%s was not mirrored because its mirror attribute is set off.' % other)
+                    vtool.util.show('%s was not mirrored because its mirror attribute is set off.' % other)
                     continue
             
             lock_state = attr.LockTransformState(other)
@@ -5069,8 +4690,8 @@ def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_m
             if not children:
                 rotate = cmds.getAttr('%s.rotate' % transform)[0]
                 scale = cmds.getAttr('%s.scale' % transform)[0]
-                rotate = util.convert_to_sequence(rotate)
-                scale = util.convert_to_sequence(scale)
+                rotate = vtool.util.convert_to_sequence(rotate)
+                scale = vtool.util.convert_to_sequence(scale)
                 rotate[1] *= -1
                 rotate[2] *= -1
                 cmds.setAttr('%s.rotate' % other, *rotate, type = 'float3')
@@ -5081,7 +4702,7 @@ def mirror_xform(prefix = None, suffix = None, string_search = None, create_if_m
             fixed.append(other)
             
     if create_if_missing:
-        for other in list(other_parents.keys()):
+        for other in other_parents.keys():
             parent = other_parents[other]
             
             if cmds.objExists(parent):
@@ -5213,7 +4834,7 @@ def match_orient(prefix, other_prefix):
 
 
 
-def scale_constraint_to_local(scale_constraint, keep_negative_scale = True):
+def scale_constraint_to_local(scale_constraint):
     """
     Scale constraint can work wrong when given the parent matrix.
     Disconnect the parent matrix to remove this behavior.
@@ -5235,22 +4856,19 @@ def scale_constraint_to_local(scale_constraint, keep_negative_scale = True):
     for inc in range(0, weight_count):
         target_attr = '%s.target[%s].targetParentMatrix' % (scale_constraint, inc)
         
-        if not keep_negative_scale:
-            attr.disconnect_attribute(target_attr)
         
-        if keep_negative_scale:
-            matrix = cmds.getAttr(target_attr)
-            test_mult = attr.get_attribute_input(target_attr, node_only = True)
-            
-            attr.disconnect_attribute(target_attr)
-            
-            if not cmds.nodeType(test_mult) == 'multMatrix':
-            
-                mult = cmds.createNode('multMatrix', n = 'multTarget_%s_%s' % (inc, scale_constraint))
-                cmds.setAttr('%s.matrixIn[0]' % mult, *matrix, type = 'matrix')
-                cmds.connectAttr('%s.matrixSum' % mult, target_attr)
-            
-            
+        matrix = cmds.getAttr(target_attr)
+        test_mult = attr.get_attribute_input(target_attr, node_only = True)
+        
+        attr.disconnect_attribute(target_attr)
+        
+        if not cmds.nodeType(test_mult) == 'multMatrix':
+        
+            mult = cmds.createNode('multMatrix', n = 'multTarget_%s_%s' % (inc, scale_constraint))
+            cmds.setAttr('%s.matrixIn[0]' % mult, *matrix, type = 'matrix')
+            cmds.connectAttr('%s.matrixSum' % mult, target_attr)
+        
+        
     #cmds.setAttr('%s.offset' % scale_constraint, *offset)
     
 
@@ -5588,8 +5206,6 @@ def orig_matrix_match(transform, destination_transform):
     parent_inverse_matrix = cmds.getAttr('%s.parentInverseMatrix' % transform)
     rotate_order = cmds.getAttr('%s.rotateOrder' % transform)
     
-    rotate_pivot = cmds.getAttr('%s.rotatePivot' % transform)[0]
-    
     orig_dest_matrix = cmds.getAttr('%s.origMatrix' % destination_transform)
     dest_matrix = cmds.getAttr('%s.worldMatrix' % destination_transform)
     
@@ -5598,18 +5214,7 @@ def orig_matrix_match(transform, destination_transform):
     om_orig_dest_matrix = om.MMatrix(orig_dest_matrix)
     om_dest_matrix = om.MMatrix(dest_matrix)
     
-    tm_orig_matrix = om.MTransformationMatrix(om_orig_matrix)
-    v_rotate_pivot = om.MVector(rotate_pivot)
-    tm_orig_matrix.translateBy(v_rotate_pivot, om.MSpace.kObject)
-    om_orig_matrix = tm_orig_matrix.asMatrix()
-    
-    tm = om.MTransformationMatrix()
-    tm.translateBy(v_rotate_pivot, om.MSpace.kObject)
-    pivot_matrix = tm.asMatrix()
-    
     new_matrix = om_orig_matrix * om_orig_dest_matrix.inverse() * om_dest_matrix * om_parent_inverse_matrix
-    
-    new_matrix = new_matrix * pivot_matrix.inverse()
     
     transform_matrix = om.MTransformationMatrix(new_matrix)
     transform_matrix.reorderRotation(rotate_order + 1)
@@ -5650,34 +5255,3 @@ def orig_matrix_match(transform, destination_transform):
         cmds.setAttr('%s.scaleZ' % transform, values[2])
     except:
         pass
-
-def add_twist_reader(transform, read_axis = 'X'):
-    
-    read_axis = read_axis.upper()
-    
-    local_matrix = cmds.createNode('multMatrix', n = 'twistLocalMatrix_%s' % transform)
-    
-    cmds.connectAttr('%s.worldMatrix[0]' % transform, '%s.matrixIn[0]' % local_matrix)
-    cmds.connectAttr('%s.parentInverseMatrix[0]' % transform, '%s.matrixIn[1]' % local_matrix)
-    
-    local_matrix_offset = cmds.getAttr('%s.inverseMatrix' % transform)
-    cmds.setAttr('%s.matrixIn[2]' % local_matrix, *local_matrix_offset, type = 'matrix')
-    
-    decompose = cmds.createNode('decomposeMatrix', n = 'twistDecompose_%s' % transform)
-    
-    cmds.connectAttr('%s.matrixSum' % local_matrix, '%s.inputMatrix' % decompose)
-    
-    normalize = cmds.createNode('quatNormalize', n = 'twistNormalize_%s' % transform)
-    
-    cmds.connectAttr('%s.outputQuat%s' % (decompose, read_axis), '%s.inputQuat%s' % (normalize,read_axis))
-    cmds.connectAttr('%s.outputQuatW' % decompose, '%s.inputQuatW' % normalize)
-    
-    euler = cmds.createNode('quatToEuler', n = 'twistEuler_%s' % transform)
-    
-    cmds.addAttr(transform, ln = 'twist', k = True)
-    
-    cmds.connectAttr('%s.outputQuat' % normalize, '%s.inputQuat' % euler)
-    
-    cmds.connectAttr('%s.outputRotate%s' % (euler, read_axis), '%s.twist' % transform)
-    
-    

@@ -1,23 +1,23 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import string
 import math
 
-from .. import util, util_math
+#import util
+import api
+import vtool.util
+import vtool.util_math
 
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
-
-from . import api
-from . import core
-from . import attr
-from . import space
-from . import anim
-from . import curve
-from . import geo
-from . import deform
+    
+import core
+import attr
+import space
+import anim
+import curve
+import geo
+import deform
 
 from vtool import logger
 log = logger.get_logger(__name__) 
@@ -41,7 +41,7 @@ class Control(object):
         self.shapes = core.get_shapes(self.control)
         
         if not self.shapes:
-            util.warning('%s has no shapes' % self.control)
+            vtool.util.warning('%s has no shapes' % self.control)
             
         
             
@@ -74,8 +74,7 @@ class Control(object):
         """
         
         shapes = core.get_shapes(self.control)
-        color =attr.get_color(shapes[0], as_float = True)
-        lod_input = attr.get_attribute_input('%s.lodVisibility' % shapes[0])
+        color =attr.get_color(shapes[0])
         
         curve_data = curve.CurveDataInfo()
         curve_data.set_active_library('default_curves')
@@ -87,14 +86,6 @@ class Control(object):
             attr.set_color_rgb(self.shapes, *color)
         else:
             attr.set_color(self.shapes, color)
-        
-        
-        if lod_input:
-            for shape in self.shapes:
-                try:
-                    cmds.connectAttr(lod_input, '%s.lodVisibility' % shape)
-                except:
-                    pass
     
     def set_curve_as_text(self, text):
         
@@ -259,10 +250,7 @@ class Control(object):
         """
         shapes = core.get_shapes(self.control)
         
-        if type(value) == list or type(value) == tuple:
-            attr.set_color_rgb(shapes, *value)
-        else:
-            attr.set_color(shapes, value)
+        attr.set_color(shapes, value)
     
     def color_rgb(self, r=0,g=0,b=0):
         """
@@ -274,34 +262,7 @@ class Control(object):
         shapes = core.get_shapes(self.control)
         
         attr.set_color_rgb(shapes, r,g,b)
-    
-    def get_color(self):
         
-        shapes = core.get_shapes(self.control)
-        
-        color = attr.get_color(shapes[0], as_float = True)
-        
-        if type(color) != list:
-            color = attr.color_to_rgb(color)
-        
-        return color
-        
-    
-    def set_color_hue(self, value):
-        color = self.get_color()
-        color = attr.set_color_hue(color, value)
-        self.color_rgb(*color)
-    
-    def set_color_saturation(self, value):
-        color = self.get_color()
-        color = attr.set_color_saturation(color, value)
-        self.color_rgb(*color)
-    
-    def set_color_value(self, value):
-        
-        color = self.get_color()
-        color = attr.set_color_value(color, value)
-        self.color_rgb(*color)
     
     def show_rotate_attributes(self):
         """
@@ -403,7 +364,7 @@ class Control(object):
         
         cmds.setAttr('%s.rotateOrder' % self.control, value)
     
-    def color_respect_side(self, sub = False, center_tolerance = 0.001, offset = 0):
+    def color_respect_side(self, sub = False, center_tolerance = 0.001):
         """
         Look at the position of a control, and color it according to its side on left, right or center.
         
@@ -416,15 +377,15 @@ class Control(object):
         """
         position = cmds.xform(self.control, q = True, ws = True, t = True)
         
-        if position[0] > offset:
+        if position[0] > 0:
             color_value = attr.get_color_of_side('L', sub)
             side = 'L'
 
-        if position[0] < offset:
+        if position[0] < 0:
             color_value = attr.get_color_of_side('R', sub)
             side = 'R'
             
-        if position[0] < (center_tolerance + offset) and position[0] > ((center_tolerance * -1) + offset):
+        if position[0] < center_tolerance and position[0] > center_tolerance*-1:
             color_value = attr.get_color_of_side('C', sub)
             side = 'C'
             
@@ -526,7 +487,7 @@ class Control(object):
                 
                 if inc < len(orig_shapes) and inc < len(shapes):
                     
-                    color = attr.get_color(orig_shapes[inc], as_float = True)
+                    color = attr.get_color(orig_shapes[inc])
                 
                 colors[shape] = color
                 
@@ -544,10 +505,6 @@ class Control(object):
         cmds.delete(temp)
         
         core.rename_shapes(self.control)
-
-    def fix_sub_control_shapes(self):
-        
-        fix_sub_controls(self.control)
 
 class ControlGroup(object):
     
@@ -613,7 +570,7 @@ class StoreControlData(attr.StoreData):
                         sub_attributes[sub] = None
             
         if sub_attributes:
-            attributes += list(sub_attributes.keys())
+            attributes += sub_attributes.keys()
             
         if not attributes:
             return
@@ -755,7 +712,7 @@ class StoreControlData(attr.StoreData):
             data = eval(data)
         
 
-        if control in data:
+        if data.has_key(control):
             data.pop(control)
             
         self.set_data(data)
@@ -800,7 +757,7 @@ class StoreControlData(attr.StoreData):
             
             self._set_control_data_in_dict(control, data)
         if not data:
-            util.warning('Error setting data for %s' % control )
+            vtool.util.warning('Error setting data for %s' % control )
         
     
         
@@ -850,7 +807,7 @@ class StoreControlData(attr.StoreData):
             self._set_control_data(control, attribute_data)
         
         if missing_controls:
-            util.warning('%s is trying to set values on the following controls which are absent from the scene.\n %s' % (self.node, missing_controls)) 
+            vtool.util.warning('%s is trying to set values on the following controls which are absent from the scene.\n %s' % (self.node, missing_controls)) 
             
         return data
             
@@ -917,7 +874,7 @@ class StoreControlData(attr.StoreData):
                 if not self._has_transform_value(control):
                     continue
                 
-                if not control in controls:
+                if not controls.has_key(control):
                     controls[control] = []
 
                 temp_group = cmds.group(em = True, n = core.inc_name('temp_%s' % control))
@@ -1034,9 +991,7 @@ class StretchyChain:
             multiply.outputX_out('%s.secondTerm' % stretch_condition)
             multiply.outputX_out('%s.colorIfFalseR' % stretch_condition)
         
-        self.distance_offset = multiply.node
-        
-        return self.distance_offset
+        return multiply.node
 
     def _create_stretch_distance(self, top_locator, btm_locator, distance_offset):
         
@@ -1116,7 +1071,7 @@ class StretchyChain:
             
             if self.scale_offset != 1:
                 
-                offset_multiply = cmds.createNode('multiplyDivide', n = core.inc_name('multiplyDivide_scaleOffset'))
+                offset_multiply = cmds.createNode('multiplyDivide', n = 'multiplyDivide_scaleOffset')
                 offset_variable.connect_out('%s.input1X' % offset_multiply)
                 
                 offset_value = 1.0/self.scale_offset
@@ -1205,7 +1160,7 @@ class StretchyChain:
         damp.set_max_value(1)
         damp.create()
         
-        remap = cmds.createNode( "remapValue" , n = core.inc_name("%s_remapValue_%s" % (self.damp_name, self.name)) )
+        remap = cmds.createNode( "remapValue" , n = "%s_remapValue_%s" % (self.damp_name, self.name) )
         cmds.setAttr("%s.value[2].value_Position" % remap, 0.4);
         cmds.setAttr("%s.value[2].value_FloatValue" % remap, 0.666);
         cmds.setAttr("%s.value[2].value_Interp" % remap, 3)
@@ -1214,8 +1169,8 @@ class StretchyChain:
         cmds.setAttr("%s.value[3].value_FloatValue" % remap, 0.9166);
         cmds.setAttr("%s.value[3].value_Interp" % remap, 1)
     
-        multi = cmds.createNode ( "multiplyDivide", n = core.inc_name("%s_offset_%s" % (self.damp_name, self.name)))
-        add_double = cmds.createNode( "addDoubleLinear", n = core.inc_name("%s_addDouble_%s" % (self.damp_name, self.name)))
+        multi = cmds.createNode ( "multiplyDivide", n = "%s_offset_%s" % (self.damp_name, self.name))
+        add_double = cmds.createNode( "addDoubleLinear", n = "%s_addDouble_%s" % (self.damp_name, self.name))
 
         damp.connect_out('%s.input2X' % multi)
         
@@ -1419,8 +1374,8 @@ class StretchyElbowLock(object):
         self._do_create_soft_ik = False
     
     def _build_locs(self):
-        self.top_loc = cmds.spaceLocator(n = core.inc_name('distanceLocator_top_%s' % self.description))[0]
-        self.btm_loc = cmds.spaceLocator(n = core.inc_name('distanceLocator_btm_%s' % self.description))[0]
+        self.top_loc = cmds.spaceLocator(n = 'distanceLocator_top_%s' % self.description)[0]
+        self.btm_loc = cmds.spaceLocator(n = 'distanceLocator_btm_%s' % self.description)[0]
         
         cmds.parent(self.top_loc, self.controls[0])
         attr.zero_xform_channels(self.top_loc)
@@ -1445,12 +1400,8 @@ class StretchyElbowLock(object):
             found.append(new)
             
         cmds.hide(found[0])
-        
+            
         self.dup_joints = found
-        
-        parent = cmds.listRelatives(found[0], p = True)
-        if not parent:
-            cmds.parent(found[0], self._parent)
     
     def _create_distance(self, transform1, transform2):
         
@@ -1472,6 +1423,8 @@ class StretchyElbowLock(object):
             cmds.connectAttr('%s.output' % add_double_linear, input_attribute)
         
         return add_double_linear
+    
+    
     
     def _multiply_divide(self, attribute1, attribute2, input_attribute = None):
         
@@ -1783,7 +1736,7 @@ class SoftIk(object):
         cmds.connectAttr('%s.outColorR' % inside_condition, '%s.translateX' % locator)
         
         if self._btm_control:    
-            group = cmds.group(em = True, n = core.inc_name('softOnOff_%s' % self.description))
+            group = cmds.group(em = True, n = 'softOnOff_%s' % self.description)
             constraint = cmds.pointConstraint([locator, self._btm_control], group)[0]
             constraint_edit = space.ConstraintEditor()
             
@@ -1850,7 +1803,7 @@ class RiggedLine(object):
     
     def _build_top_group(self):
         
-        self.top_group = cmds.group(em = True, n = core.inc_name('guideLineGroup_%s' % self.name))
+        self.top_group = cmds.group(em = True, n = 'guideLineGroup_%s' % self.name)
         cmds.setAttr('%s.inheritsTransform' % self.top_group, 0)
     
     def _create_curve(self):
@@ -1891,8 +1844,8 @@ class RiggedLine(object):
         
         if self.local:
             #CBB
-            offset1 = cmds.group(em = True, n = core.inc_name('xform_%s' % self.cluster1[1]))
-            offset2 = cmds.group(em = True, n = core.inc_name('xform_%s' % self.cluster2[1]))
+            offset1 = cmds.group(em = True, n = 'xform_%s' % self.cluster1[1])
+            offset2 = cmds.group(em = True, n = 'xform_%s' % self.cluster2[1])
             
             cmds.parent(offset1, offset2, self.top_group)
 
@@ -1941,14 +1894,14 @@ class RigSwitch(object):
         self.switch_joint = switch_joint
         
         if not cmds.objExists('%s.switch' % switch_joint):
-            util.warning('%s is most likely not a buffer joint with switch attribute.' % switch_joint)
+            vtool.util.warning('%s is most likely not a buffer joint with switch attribute.' % switch_joint)
 
         self.groups = {}
         
         weight_count = self.get_weight_count()
         
         if not weight_count:
-            util.warning('%s has no weights.' % weight_count)
+            vtool.util.warning('%s has no weights.' % weight_count)
         
         for inc in range(0, weight_count):
             self.groups[inc] = None
@@ -1984,16 +1937,16 @@ class RigSwitch(object):
             groups (list): The list of groups that should be have visibility attached to the index.
         """
         
-        groups = util.convert_to_sequence(groups)
+        groups = vtool.util.convert_to_sequence(groups)
         
         if not self.switch_joint or not cmds.objExists(self.switch_joint):
-            util.warning('Switch joint %s does not exist' % self.switch_joint)
+            vtool.util.warning('Switch joint %s does not exist' % self.switch_joint)
             return
         
         weight_count = self.get_weight_count()
         
         if weight_count < ( index + 1 ):
-            util.warning('Adding groups to index %s is undefined. %s.witch does not have that many inputs.' % (index, self.switch_joint))
+            vtool.util.warning('Adding groups to index %s is undefined. %s.witch does not have that many inputs.' % (index, self.switch_joint))
         
         self.groups[index] = groups
         
@@ -2029,11 +1982,8 @@ class RigSwitch(object):
             var.set_min_value(0)
             
             max_value = weight_count -1
-            var_max_value = var.get_max_value()
-            
-            if var_max_value != None:
-                if max_value < var_max_value:
-                    max_value = var_max_value
+            if max_value < var.get_max_value():
+                max_value = var.get_max_value()
             
             var.set_max_value( max_value ) 
             var.set_keyable(True) 
@@ -2091,7 +2041,7 @@ class MirrorControlKeyframes():
         
         for keyframe in found_keyframes:
             
-            util.show('Working to mirror keyframe: %s' % keyframe)
+            vtool.util.show('Working to mirror keyframe: %s' % keyframe)
             
             cmds.dgeval(keyframe)
             new_keyframe = cmds.duplicate(keyframe)[0]
@@ -2105,7 +2055,7 @@ class MirrorControlKeyframes():
             
             if not mapped_output:
                 cmds.delete(new_keyframe)
-                util.warning('Keyframe %s has no outputs to mirror. Skipping' % keyframe)
+                vtool.util.warning('Keyframe %s has no outputs to mirror. Skipping' % keyframe)
                 continue
             
             for inc in range(0, len(mapped_output), 2):
@@ -2127,7 +2077,7 @@ class MirrorControlKeyframes():
                         try:
                             cmds.connectAttr(new_output, mapped_output[inc+1], f = True)
                         except:
-                            util.warning('Could not connect %s into %s' % (new_output, mapped_output[inc+1]))
+                            vtool.util.warning('Could not connect %s into %s' % (new_output, mapped_output[inc+1]))
                     if do_fix_translates:
                         
                         attr.connect_multiply(new_output, mapped_output[inc+1], -1)
@@ -2135,7 +2085,7 @@ class MirrorControlKeyframes():
                     no_output = False
             
                 if attr.get_inputs(mapped_output[inc+1]):
-                    util.warning('Could not output mirrored keyframe into %s. An input already exists for that attribute.' % mapped_output[inc+1] )
+                    vtool.util.warning('Could not output mirrored keyframe into %s. An input already exists for that attribute.' % mapped_output[inc+1] )
             
             if no_output:
                 cmds.delete(new_keyframe)
@@ -2180,7 +2130,6 @@ class TwistRibbon(object):
         self._top_twist_fix = False
         self._dual_quat = False
         self._ribbon_offset = 1
-        self._rounded = False
         
     def _create_top_twister_joint(self):
         
@@ -2254,9 +2203,6 @@ class TwistRibbon(object):
 
     def set_ribbon_offset(self, value):
         self._ribbon_offset = value
-        
-    def set_rounded(self, bool_value):
-        self._rounded = bool_value
 
     def create(self):
         
@@ -2266,7 +2212,7 @@ class TwistRibbon(object):
         if not self._end_transform:
             children = cmds.listRelatives(self._joint, type = 'joint')
             if not children:
-                util.warning('No child found for %s. Could not create strip' % self._joint)
+                vtool.util.warning('No child found for %s. Could not create strip' % self._joint)
                 return
             temp_group = children[0]
         if self._end_transform:
@@ -2274,11 +2220,7 @@ class TwistRibbon(object):
         ribbon_gr = cmds.group(em = True, n = core.inc_name('twistRibbon_%s' % self._description))
         self.group = ribbon_gr
         
-        spans = -1
-        if self._rounded:
-            spans = 1
-        
-        self.surface = geo.transforms_to_nurb_surface([self._joint, temp_group], description = self._description, spans = spans,offset_axis=self._offset_axis, offset_amount = self._ribbon_offset)
+        self.surface = geo.transforms_to_nurb_surface([self._joint, temp_group], description = self._description, offset_axis=self._offset_axis, offset_amount = self._ribbon_offset)
         if self._dual_quat:
             cmds.rebuildSurface(self.surface, ch = False,
                                             rpo = 1,
@@ -2301,13 +2243,6 @@ class TwistRibbon(object):
             self.joints = geo.nurb_surface_v_to_transforms(self.surface, self._description, count=self.joint_count)
             cmds.parent(self.joints, ribbon_gr)
         
-        max_u = cmds.getAttr('%s.minMaxRangeU' % self.surface)[0][1]
-        u_value = max_u/2.0
-        curve, curve_node = cmds.duplicateCurve(self.surface + '.u[' + str(u_value) + ']', ch = True, rn = 0, local = 0, r = True, n = core.inc_name('liveCurve_%s' % self._description))
-        curve_node = cmds.rename(curve_node, core.inc_name('curveFromSurface_%s' % self._description))
-        self.surface_stretch_curve = curve
-        self.surface_stretch_curve_node = curve_node
-        cmds.parent(curve, ribbon_gr)
         
         rivet_gr = cmds.group(em = True, n = core.inc_name('twistRibbon_rivets_%s' % self._description))
         self.rivet_gr = rivet_gr
@@ -2336,8 +2271,6 @@ class TwistRibbon(object):
         
         
         skin_surface = deform.SkinJointSurface(self.surface, self._description)
-        if self._rounded:
-            skin_surface.set_join_ends(True)
         skin_surface.set_joint_u(True)
         skin_surface.create()
         
@@ -2438,7 +2371,7 @@ def rename_message_groups(search_name, replace_name):
           
 def create_joint_buffer(joint, connect_inverse = True):
     
-    fix_joint = cmds.joint(n = core.inc_name('bufferFix_%s' % joint))
+    fix_joint = cmds.joint(n = 'bufferFix_%s' % joint)
     cmds.setAttr('%s.drawStyle' % fix_joint, 2)
     space.MatchSpace(joint, fix_joint).translation_rotation()
     cmds.makeIdentity(fix_joint, apply = True, r = True)
@@ -2687,11 +2620,11 @@ def create_joints_on_curve(curve, joint_count, description, attach = True, creat
             attr.connect_translate(control_name, joint)
             attr.connect_rotate(control_name, joint)
 
-            offset = util.fade_sine(percent)
+            offset = vtool.util.fade_sine(percent)
             
             attr.connect_multiply('%s.twist' % control_group, '%s.rotateX' % joint, offset)
 
-            plus = cmds.createNode('plusMinusAverage', n = core.inc_name('plus_%s' % control_group))
+            plus = cmds.createNode('plusMinusAverage', n = 'plus_%s' % control_group)
             cmds.setAttr('%s.input1D[0]' % plus, 1)
             
             attr.connect_multiply('%s.offsetScale' % control_group, '%s.input1D[1]' % plus, offset, plus = False)
@@ -2776,7 +2709,7 @@ def create_spline_ik_stretch(curve, joints, node_for_attribute = None, create_st
             var.set_keyable(True)
             var.create(node_for_attribute)
         
-            blend = cmds.createNode('blendColors', n = core.inc_name('blendColors_stretchOnOff_%s' % curve))
+            blend = cmds.createNode('blendColors', n = 'blendColors_stretchOnOff_%s' % curve)
     
             cmds.connectAttr(attribute, '%s.color1R' % blend)
             cmds.setAttr('%s.color2R' % blend, 1)
@@ -2790,12 +2723,12 @@ def create_spline_ik_stretch(curve, joints, node_for_attribute = None, create_st
         
         if create_bulge:
             #bulge cbb
-            plus = cmds.createNode('plusMinusAverage', n = core.inc_name('plusMinusAverage_scale_%s' % joint))
+            plus = cmds.createNode('plusMinusAverage', n = 'plusMinusAverage_scale_%s' % joint)
             
             cmds.addAttr(plus, ln = 'scaleOffset', dv = 1, k = True)
             cmds.addAttr(plus, ln = 'bulge', dv = 1, k = True)
             
-            arc_value = util.fade_sine(percent)
+            arc_value = vtool.util.fade_sine(percent)
             
             attr.connect_multiply('%s.outputX' % multiply_scale_offset, '%s.bulge' % plus, arc_value)
             
@@ -2804,13 +2737,13 @@ def create_spline_ik_stretch(curve, joints, node_for_attribute = None, create_st
             
             scale_value = cmds.getAttr('%s.output1D' % plus)
             
-            multiply_offset = cmds.createNode('multiplyDivide', n = core.inc_name('multiply_%s' % joint))
+            multiply_offset = cmds.createNode('multiplyDivide', n = 'multiply_%s' % joint)
             cmds.setAttr('%s.operation' % multiply_offset, 2)
             cmds.setAttr('%s.input1X' % multiply_offset, scale_value)
         
             cmds.connectAttr('%s.output1D' % plus, '%s.input2X' % multiply_offset)
         
-            blend = cmds.createNode('blendColors', n = core.inc_name('blendColors_%s' % joint))
+            blend = cmds.createNode('blendColors', n = 'blendColors_%s' % joint)
         
             attribute = '%s.outputR' % blend
             
@@ -2949,7 +2882,7 @@ def create_distance_falloff(source_transform, source_local_vector = [1,0,0], tar
     
     cmds.addAttr(distance_between,ln = 'falloff', at = 'double', k = True)
         
-    follow_locator = cmds.spaceLocator(n = core.inc_name('follow_%s' % distance_between))[0]
+    follow_locator = cmds.spaceLocator(n = 'follow_%s' % distance_between)[0]
     match = space.MatchSpace(source_transform, follow_locator)
     match.translation_rotation()
     cmds.parent(follow_locator, source_transform)
@@ -2957,7 +2890,7 @@ def create_distance_falloff(source_transform, source_local_vector = [1,0,0], tar
     
     attr.set_color(follow_locator, 6)
     
-    target_locator = cmds.spaceLocator(n = core.inc_name('target_%s' % distance_between))[0]
+    target_locator = cmds.spaceLocator(n = 'target_%s' % distance_between)[0]
     match = space.MatchSpace(source_transform, target_locator)
     match.translation_rotation()
     
@@ -3021,7 +2954,7 @@ def create_attribute_lag(source, attribute, targets):
     var.set_max_value(1)
     var.create(source)
     
-    frame_cache = cmds.createNode('frameCache', n = core.inc_name('frameCache_%s_%s' % (source, attribute) ))
+    frame_cache = cmds.createNode('frameCache', n = 'frameCache_%s_%s' % (source, attribute) )
     
     cmds.connectAttr('%s.%s' % (source, attribute), '%s.stream' % frame_cache)
     
@@ -3056,7 +2989,7 @@ def create_attribute_spread(control, transforms, name = 'spread', axis = 'Y', in
             found.append(transform)
     
     if not found:
-        util.warning('No transforms found to spead.')
+        vtool.util.warning('No transforms found to spead.')
         return
     
     variable = '%s.%s' % (control, name)
@@ -3147,11 +3080,11 @@ def create_offset_sequence(attribute, target_transforms, target_attributes):
     section = 1.00/count
     offset = 0
     
-    anim_curve = cmds.createNode('animCurveTU', n = core.inc_name('animCurveTU_%s' % attribute.replace('.','_')))
+    anim_curve = cmds.createNode('animCurveTU', n = 'animCurveTU_%s' % attribute.replace('.','_'))
     #cmds.connectAttr(attribute, '%s.input' % anim_curve)
     
     for transform in target_transforms:
-        frame_cache = cmds.createNode('frameCache', n = core.inc_name('frameCache_%s' % transform))
+        frame_cache = cmds.createNode('frameCache', n = 'frameCache_%s' % transform)
         
         cmds.setAttr('%s.varyTime' % frame_cache, inc)
         
@@ -3399,39 +3332,6 @@ def mirror_controls():
         mirrored_controls.append(other_control)
         
 
-def mirror_mesh_to_matching_mesh(left_mesh, right_mesh):
-    """
-    given 2 meshes under different transforms
-    using the positions from left mesh, 
-    calculate the right position and set the verts on the right mesh.
-    """
-    verts = cmds.ls('%s.vtx[*]' % left_mesh, flatten = True)
-    vert_count = len(verts)
-    
-    transform_pos = cmds.xform(left_mesh, q = True, ws = True, t = True)
-    
-    new_pos = transform_pos
-    new_pos[0] = (new_pos[0] * -1)
-    
-    cmds.xform(right_mesh, ws = True, t = new_pos)
-    
-    
-    other_verts = cmds.ls('%s.vtx[*]' % right_mesh, flatten = True)
-    
-    compatible = geo.is_mesh_compatible(left_mesh, right_mesh)
-    if not compatible:
-        cmds.warning('left and right mesh not compatible')
-        return
-    
-    for inc in range(0, vert_count):
-        
-        position = cmds.xform(verts[inc], q = True, ws = True, t = True)
-        
-        new_position = list(position)
-        new_position[0] = (position[0] * -1)
-        
-        cmds.xform(other_verts[inc], ws = True, t = new_position)
-
 def mirror_curve(prefix = None):
     """
     Mirror curves in a scene if the end in _L and _R
@@ -3532,7 +3432,7 @@ def process_joint_weight_to_parent(mesh):
         
         progress.inc()
         
-        if util.break_signaled():
+        if vtool.util.break_signaled():
             break
         
         if progress.break_signaled():
@@ -3628,7 +3528,7 @@ def fix_fade(target_curve, follow_fade_multiplies):
     control_at_curve_position = cmds.pointOnCurve(target_curve, parameter = parameter)
     control_at_curve_y = [0, control_at_curve_position[1], 0]
     
-    total_distance = util.get_distance(control_position_y, control_at_curve_y)
+    total_distance = vtool.util.get_distance(control_position_y, control_at_curve_y)
     
     multi_count = len(multiplies)
     
@@ -3645,7 +3545,7 @@ def fix_fade(target_curve, follow_fade_multiplies):
         driver_at_curve = cmds.pointOnCurve(target_curve, parameter = parameter)
         driver_at_curve_y = [0, driver_at_curve[1], 0]
         
-        driver_distance = util.get_distance(driver_position_y, driver_at_curve_y)
+        driver_distance = vtool.util.get_distance(driver_position_y, driver_at_curve_y)
         
         value = (driver_distance/total_distance)
     
@@ -3681,7 +3581,7 @@ def fix_sub_controls(controls = None):
     if not controls:
         return
     
-    controls = util.convert_to_sequence(controls)
+    controls = vtool.util.convert_to_sequence(controls)
     
     found = []
     
@@ -3698,24 +3598,9 @@ def fix_sub_controls(controls = None):
         scale_offset = .85
         
         if not outputs:
-            util.warning('No controls connected to subVisibility. Check that the subVisibility attribute was not edited.')
-        
-        visited = {}
+            vtool.util.warning('No controls connected to subVisibility. Check that the subVisibility attribute was not edited.')
         
         for output_node in outputs:
-            
-            if output_node in visited:
-                continue
-            
-            if cmds.nodeType(output_node) == 'nurbsCurve':
-                parent = cmds.listRelative(output_node, p = True)[0]
-                
-                if parent in visited:
-                    continue
-                
-                visited[parent[0]] = None
-            else:
-                visited[output_node] = None
             
             transform = output_node
             shape = None
@@ -3744,10 +3629,9 @@ def fix_sub_controls(controls = None):
                 
                 geo.match_cv_position(control_shapes[inc], shapes[inc])
                 
-            
-            control_inst = Control(transform)
-            control_inst.scale_shape(scale_offset, scale_offset, scale_offset, use_pivot= False)
-            found.append(transform)
+                control_inst = Control(transform)
+                control_inst.scale_shape(scale_offset, scale_offset, scale_offset, use_pivot= False)
+                found.append(transform)
                 
             scale_offset -= .1
             
@@ -3900,7 +3784,7 @@ def match_to_joints(control_group, info_dict = {}, auto_key = False):
     found = []
     
     if rig_type.find('Fk') > -1:
-        util.show('Match Fk to Ik')
+        vtool.util.show('Match Fk to Ik')
         for inc in range(0, len(controls)):
             
             control = controls[inc]
@@ -3915,7 +3799,7 @@ def match_to_joints(control_group, info_dict = {}, auto_key = False):
             found.append(control)
     
     if rig_type.find('IkAppendageRig') > -1:
-        util.show('Match Ik to Fk')
+        vtool.util.show('Match Ik to Fk')
         
         for inc in range(0, len(controls)):
             
@@ -3934,7 +3818,7 @@ def match_to_joints(control_group, info_dict = {}, auto_key = False):
                 cmds.setAttr('%s.autoTwist' % control, 0)
     
     if auto_key and found:
-        cmds.setKeyframe(found, attribute = ['translateX','translateY','translateZ','rotateX','rotateY','rotateZ','scaleX','scaleY','scaleZ'])
+        cmds.setKeyframe(found)
         cmds.select(found)
     
 def match_switch_rigs(control_group, auto_key = False):
@@ -3975,13 +3859,6 @@ def match_switch_rigs(control_group, auto_key = False):
             cmds.setKeyframe(switch)
 
 def match_switch_rigs_over_time(control_group, start_frame, end_frame):
-    """
-    this will switch to the control group supplied
-    if the control_group is rig1 than the switch will be set to rig2 before the match happens.
-    """
-    
-    if start_frame == None:
-        return
     
     info_dict = get_important_info(control_group)
     joints = info_dict['joints']
@@ -3994,13 +3871,6 @@ def match_switch_rigs_over_time(control_group, start_frame, end_frame):
     
     rig1 = attr.get_message_input(joints[0], 'rig1')
     rig2 = attr.get_message_input(joints[0], 'rig2')
-    
-    current_switch = cmds.getAttr(switch)
-    
-    if current_switch == 0:
-        control_group = rig2
-    else:
-        control_group = rig1
     
     if rig1 == control_group:
         switch_value = 1
@@ -4042,15 +3912,6 @@ def match_switch_rigs_from_control(control, auto_key = False):
     group = get_control_group_with_switch(control)
     match_switch_rigs(group, auto_key)
 
-def set_switch_parent(controls, parent_switch):
-    """
-    Args:
-        parent_switch (str): The name of a control group that has a switch (the control group has a switch when its 1 of 2 rigs are on 1 joint chain)
-    """
-    
-    controls = util.convert_to_sequence(controls)
-    for control in controls:
-        attr.connect_message(parent_switch, control, 'switchParent')
 
 
 def setup_zip_fade(left_zip_attr, right_zip_attr, fade_attributes, description = 'zip'):
@@ -4090,9 +3951,9 @@ def setup_zip_fade(left_zip_attr, right_zip_attr, fade_attributes, description =
                     plus_node = input_node
                  
             else:
-                plus_node = cmds.createNode('plusMinusAverage', n = core.inc_name('%sPlus_%s_%s' % (description, inc+1, side)))
+                plus_node = cmds.createNode('plusMinusAverage', n = '%sPlus_%s_%s' % (description, inc+1, side))
                 
-                zip_clamp = cmds.createNode('clamp',n = core.inc_name('%sClamp_%s_%s' % (description, inc+1, side)))
+                zip_clamp = cmds.createNode('clamp',n = '%sClamp_%s_%s' % (description, inc+1, side))
                 cmds.setAttr('%s.maxR' % zip_clamp, 1)
                 
                 cmds.connectAttr('%s.output1D' % plus_node, '%s.inputR' % zip_clamp)
@@ -4102,7 +3963,7 @@ def setup_zip_fade(left_zip_attr, right_zip_attr, fade_attributes, description =
             
             target_attr = '%s.input1D[%s]' % (plus_node, slot)
             
-            fade_time = util_math.easeInSine(time_accum+time_offset)
+            fade_time = vtool.util_math.easeInSine(time_accum+time_offset)
             
             log.debug( side, '   ', inc, description, '   ----  ', time_accum, fade_time )
             
@@ -4135,7 +3996,7 @@ def create_joint_sharpen(joint, rotate_axis = 'Z', scale_axis = 'X', offset_axis
     child = children[0]
     
     if not children:
-        util.warning('Create joint sharpen needs %s to have a child that is a joint' % joint)
+        vtool.util.warning('Create joint sharpen needs %s to have a child that is a joint' % joint)
     
     space.MatchSpace(child, sharp_joint).translation_rotation()
     cmds.makeIdentity(sharp_joint, apply = True, r = True)
@@ -4145,15 +4006,8 @@ def create_joint_sharpen(joint, rotate_axis = 'Z', scale_axis = 'X', offset_axis
     cmds.setAttr('%s.radius' % sharp_joint, radius_offset)
     
     cmds.parent(sharp_joint, joint)
-    
-    offset_amount_neg = 1
-    
-    if offset_axis.startswith('-'):
-        offset_axis = offset_axis[1:]
-        offset_amount_neg = -1
-        
-    
-    cmds.setAttr('%s.translate%s' % (sharp_joint, offset_axis), offset_amount * offset_amount_neg)
+
+    cmds.setAttr('%s.translate%s' % (sharp_joint, offset_axis), offset_amount)
     
     rotate = 90
     
@@ -4161,12 +4015,9 @@ def create_joint_sharpen(joint, rotate_axis = 'Z', scale_axis = 'X', offset_axis
         rotate = -90
         rotate_axis = rotate_axis[1:]
     
+    plus = cmds.createNode('plusMinusAverage', n = 'plus_' + sharp_joint)
     
-        
-    
-    plus = cmds.createNode('plusMinusAverage', n = core.inc_name('plus_' + sharp_joint))
-    
-    cmds.setAttr('%s.input3D[0].input3D%s' % (plus,offset_axis.lower()), offset_amount * offset_amount_neg )
+    cmds.setAttr('%s.input3D[0].input3D%s' % (plus,offset_axis.lower()), offset_amount )
     
     cmds.connectAttr('%s.translateX' % child, '%s.input3D[1].input3Dx' % plus)
     cmds.connectAttr('%s.translateY' % child, '%s.input3D[1].input3Dy' % plus)
@@ -4179,7 +4030,7 @@ def create_joint_sharpen(joint, rotate_axis = 'Z', scale_axis = 'X', offset_axis
     translate_input = '%s.input3D[2].input3D%s' % (plus, scale_axis.lower())
     
     anim.quick_driven_key('%s.rotate%s' % (child, rotate_axis), '%s.input3D[2].input3D%s' % (plus, scale_axis.lower()),
-                            [-1*rotate, 0, rotate], [-1*invert_value*offset_amount_neg,0, 1*invert_value*offset_amount_neg])
+                            [-1*rotate, 0, rotate], [-1*invert_value,0, 1*invert_value])
     anim.quick_driven_key('%s.rotate%s' % (child, rotate_axis), '%s.scale%s' % (sharp_joint, scale_axis),
                             [-1*rotate, 0, rotate], [.5, 1, .5])
     
@@ -4229,11 +4080,11 @@ def get_controls_not_in_control_set(top_group, control_set = None):
 
 def get_potential_top_control(top_group):
     
-    util.show('Getting controls')
+    vtool.util.show('Getting controls')
     controls = get_potential_controls(top_group)
     
     found = []
-    util.show('Finding controls without a parent control')
+    vtool.util.show('Finding controls without a parent control')
     for control in controls:
         
         long_name = cmds.ls(control, l = True)[0]
@@ -4257,7 +4108,7 @@ def get_potential_top_control(top_group):
         return found
     
     found2 = []
-    util.show('Finding controls without a constraint')
+    vtool.util.show('Finding controls without a constraint')
     
     for control in found:
         
@@ -4324,7 +4175,7 @@ def get_potential_controls(top_group, namespace = None):
         
         rel_count[count].append(rel)
     
-    counts = list(rel_count.keys())
+    counts = rel_count.keys()
     counts.sort()
     
     rels = []
@@ -4410,7 +4261,7 @@ def is_control_shape_good(control):
         
     return passed
 
-def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, description, translate_limit = 10):
+def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, description):
     """
     If you were connecting this setup to a rig, using the example of an arm rig
     two_rig joints would be the arm and the elbow joints.
@@ -4422,11 +4273,11 @@ def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, descr
     """
     
     if not space.is_rotate_default(three_guide_joints[1]):
-        util.warning('Please zero out the rotates on %s before creating compression hinge' % three_guide_joints[1])
+        vtool.util.warning('Please zero out the rotates on %s before creating compression hinge' % three_guide_joints[1])
         return
     
     if not space.is_rotate_default(two_rig_joints[1]):
-        util.warning('Please zero out the rotates on %s before creating compression hinge' % three_guide_joints[1])
+        vtool.util.warning('Please zero out the rotates on %s before creating compression hinge' % three_guide_joints[1])
         return
     
     orig_rot = cmds.getAttr('%s.jointOrient' % two_rig_joints[1])[0]
@@ -4434,15 +4285,15 @@ def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, descr
     cmds.setAttr('%s.jointOrient' % three_guide_joints[1] , *[0,0,0])
     cmds.setAttr('%s.jointOrient' % two_rig_joints[1] , *[0,0,0])
     
-    xform_group = cmds.group(em = True, n = core.inc_name('xform_%s' % description))
-    top_group = cmds.group(em = True, n = core.inc_name('offset_%s' % description))
+    xform_group = cmds.group(em = True, n = 'xform_%s' % description)
+    top_group = cmds.group(em = True, n = 'offset_%s' % description)
     cmds.parent(top_group, xform_group)
     
     space.MatchSpace(three_guide_joints[1], xform_group).translation_rotation()
     space.MatchSpace(three_guide_joints[1], top_group).translation_rotation()
     
-    loc_mid = cmds.spaceLocator(n = core.inc_name('locator_mid_%s' % description))[0]
-    loc_btm = cmds.spaceLocator(n = core.inc_name('locator_btm_%s' % description))[0]
+    loc_mid = cmds.spaceLocator(n = 'locator_mid_%s' % description)[0]
+    loc_btm = cmds.spaceLocator(n = 'locator_btm_%s' % description)[0]
     
     cmds.parent(loc_mid, xform_group)
     cmds.parent(loc_btm, loc_mid)
@@ -4450,8 +4301,8 @@ def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, descr
     space.MatchSpace(three_guide_joints[1], loc_mid).translation_rotation()
     space.MatchSpace(three_guide_joints[2], loc_btm).translation_rotation()
     
-    vecProd1 = cmds.createNode('vectorProduct', n = core.inc_name('vectorProduct_positionNormal_%s' % description))
-    vecProd2 = cmds.createNode('vectorProduct', n = core.inc_name('vectorProduct_normal_%s' % description))
+    vecProd1 = cmds.createNode('vectorProduct', n = 'vectorProduct_positionNormal_%s' % description)
+    vecProd2 = cmds.createNode('vectorProduct', n = 'vectorProduct_normal_%s' % description)
     
     cmds.connectAttr('%s.translateX' % loc_mid, '%s.input1X' % vecProd1)
     cmds.connectAttr('%s.translateY' % loc_mid, '%s.input1Y' % vecProd1)
@@ -4468,10 +4319,10 @@ def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, descr
     cmds.connectAttr('%s.translateY' % loc_btm, '%s.input2Y' % vecProd2)
     cmds.connectAttr('%s.translateZ' % loc_btm, '%s.input2Z' % vecProd2)
     
-    mult_int = cmds.createNode('multiplyDivide', n = core.inc_name('multiplyDivide_intersection_%s' % description))
+    mult_int = cmds.createNode('multiplyDivide', n = 'multiplyDivide_intersection_%s' % description)
     cmds.setAttr('%s.operation' % mult_int, 2)
     
-    mult_dist = cmds.createNode('multiplyDivide', n = core.inc_name('multiplyDivide_distance_%s' % description))
+    mult_dist = cmds.createNode('multiplyDivide', n = 'multiplyDivide_distance_%s' % description)
     
     cmds.connectAttr('%s.outputX' % vecProd1, '%s.input1X' % mult_int)
     cmds.connectAttr('%s.outputY' % vecProd1, '%s.input1Y' % mult_int)
@@ -4499,102 +4350,4 @@ def create_matejczyk_compression_hinge(two_rig_joints, three_guide_joints, descr
     
     cmds.parentConstraint(top_group, three_guide_joints[0], mo = True)
     cmds.parentConstraint(two_rig_joints[0], xform_group, mo = True)
-    
-     
-    
-    cmds.transformLimits(top_group, tx=(-translate_limit, translate_limit), ty=(-translate_limit, translate_limit), tz=(-translate_limit, translate_limit) )
-    cmds.transformLimits(top_group, etx=(True, True), ety=(True, True), etz=(True, True ) )
-    
-    return xform_group
-
-def create_compression_joint(joint, end_parent, description, point_constraint = False):
-    """
-    joint need to be a joint with a child joint. Child joint is automatically found.
-    """
-    
-    end_joint = cmds.listRelatives(joint, c = True, type = 'joint')
-    parent_transform = cmds.listRelatives(joint, p = True)
-    
-    if end_joint:
-        end_joint = end_joint[0]
-    
-    handle = space.IkHandle(description)
-    handle.set_start_joint(joint)
-    handle.set_end_joint(end_joint)
-    handle.set_solver(handle.solver_sc)
-    handle.set_full_name(core.inc_name('ik_%s' % description))
-    ik_handle = handle.create()
-    
-    
-    
-    group = cmds.group(em = True, n = core.inc_name('setup_%s' % description))
-    loc = cmds.spaceLocator(n = core.inc_name('locator_%s' % description))[0]
-    loc_end = cmds.spaceLocator(n = core.inc_name('locatorEnd_%s' % description))[0]
-    space.MatchSpace(joint, loc).translation_rotation()
-    space.MatchSpace(end_joint, loc_end).translation_rotation()
-    
-    cmds.parent(loc, loc_end, group)
-    cmds.parent(ik_handle, loc)
-    
-    cmds.pointConstraint(parent_transform, loc, mo = True)
-    cmds.orientConstraint(parent_transform, loc, mo = True)
-    if not point_constraint:
-        cmds.parentConstraint(end_parent, loc_end, mo = True)
-    else:
-        cmds.pointConstraint(end_parent, loc_end, mo = True)
-    cmds.pointConstraint(loc_end, ik_handle, mo = True)
-    
-    distance = cmds.createNode('distanceBetween', n = core.inc_name('distance_%s' % description))
-    
-    cmds.connectAttr('%s.worldMatrix' % loc, '%s.inMatrix1' % distance)
-    cmds.connectAttr('%s.worldMatrix' % loc_end, '%s.inMatrix2' % distance)
-    
-    axis = space.get_axis_letter_aimed_at_child(joint)
-    
-    if axis:
-        if len(axis) == 2:
-            axis = axis[1]
-    
-    mult = cmds.createNode('multiplyDivide', n = core.inc_name('mult_%s' % description))
-    
-    mult_scale = cmds.createNode('multiplyDivide', n = core.inc_name('multiplyDivide_scaleOffset_%s' % description))
-    
-    #cmds.connectAttr('%s.distance' % distance, '%s.input1X' % mult_scale)
-    
-    distance_value = cmds.getAttr('%s.distance' % distance)
-    cmds.connectAttr('%s.distance' % distance, '%s.input1X' % mult)
-    cmds.connectAttr('%s.outputX' % mult_scale, '%s.input2X' % mult)
-    cmds.setAttr('%s.input1X' % mult_scale, distance_value)
-    #cmds.setAttr('%s.input2X' % mult, distance_value)
-    cmds.setAttr('%s.operation' % mult, 2)
-    
-    scale_condition = cmds.createNode('condition', n = core.inc_name('scaleCondition_%s' % description))
-    cmds.connectAttr('%s.outputX' % mult, '%s.firstTerm' % scale_condition)
-    cmds.setAttr('%s.secondTerm' % scale_condition, 1)
-    
-    neg_scale_blend = cmds.createNode('blendTwoAttr', n = core.inc_name('negScaleBlend_%s' % description))
-    pos_scale_blend = cmds.createNode('blendTwoAttr', n = core.inc_name('poseScaleBlend_%s' % description))
-
-    cmds.setAttr('%s.input[0]' % neg_scale_blend, 1)
-    cmds.connectAttr('%s.outputX' % mult, '%s.input[1]' % neg_scale_blend)
-
-    cmds.setAttr('%s.input[0]' % pos_scale_blend, 1)
-    cmds.connectAttr('%s.outputX' % mult, '%s.input[1]' % pos_scale_blend)
-    
-    cmds.connectAttr('%s.output' % neg_scale_blend, '%s.colorIfTrueR' % scale_condition)
-    cmds.connectAttr('%s.output' % pos_scale_blend, '%s.colorIfFalseR' % scale_condition)
-    
-    cmds.connectAttr('%s.outColorR' % scale_condition, '%s.scale%s' % (joint, axis))
-    
-    if not cmds.objExists('%s.compression' % joint):
-        cmds.addAttr(joint, ln = 'compression', min = 0, max = 1, dv = 1, k = True)
-    if not cmds.objExists('%s.stretch' % joint):
-        cmds.addAttr(joint, ln = 'stretch', min = 0, max = 1, dv = 1, k = True)
-    
-    cmds.connectAttr('%s.stretch' % joint, '%s.attributesBlender' % neg_scale_blend)
-    cmds.connectAttr('%s.compression' % joint, '%s.attributesBlender' % pos_scale_blend)
-    
-    cmds.hide(group)
-    
-    return group
     

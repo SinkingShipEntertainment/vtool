@@ -1,6 +1,6 @@
 name = 'vetala'
 
-version = '0.5.799.sse.1.0.0'
+version = '0.4.7.8.sse.1.0.0'
 
 authors = [
     'Louis Vottero',

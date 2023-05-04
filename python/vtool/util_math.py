@@ -1,7 +1,4 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import math
 from vtool.util import vector_multiply
@@ -617,9 +614,6 @@ def vector_multiply(vector, value):
     
     return result
 
-def vector_vector_multiply(vector1, vector2):
-    return [vector1[0]*vector2[0], vector1[1]*vector2[1]]
-
 def vector_normalize(vector):
     
     
@@ -921,30 +915,3 @@ def closest_percent_on_line_3D(start_vector, end_vector, position_vector, clamp 
             percent = 1.0
             
     return percent
-
-def vector_length(vector):
-    return math.sqrt(vector_dot_product(vector, vector))
-
-def vector_power(vector, power = 2):
-    return [vector[0]**power, vector[1]**power, vector[2]**power]
-
-def angle_between(vector1, vector2, in_degrees = False):
-    
-    value = math.acos(vector_dot_product(vector1, vector2) / (vector_length(vector1) * vector_length(vector2)))
-    
-    if in_degrees:
-        value = math.degrees(value)
-        return value
-    
-    return value
-
-def vector_project(vector_direction, vector_plane):
-
-    dot_plane = float(vector_dot_product(vector_plane, vector_plane))
-    
-    dot = float(vector_dot_product(vector_direction, vector_plane))
-    
-    result = vector_multiply(vector_plane, (dot/dot_plane))
-    
-    return result
-    

@@ -1,28 +1,29 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import traceback
+import string
 
-from .. import qt_ui
-from .. import util_file
-from .. import data
-from .. import util
-from . import process
+import vtool.qt_ui
+import vtool.util_file
+import vtool.data
+import vtool.util
+import process
 
-from vtool import qt, maya_lib
+from vtool import qt
+
+
 
 from vtool import logger
 log = logger.get_logger(__name__) 
 
-class DataProcessWidget(qt_ui.DirectoryWidget):
+class DataProcessWidget(vtool.qt_ui.DirectoryWidget):
     
-    data_created = qt_ui.create_signal(object)
+    data_created = vtool.qt_ui.create_signal(object)
     
     def __init__(self):
         
         self.sidebar = True
-        self.settings = util_file.get_vetala_settings_inst()
+        self.settings = vtool.util_file.get_vetala_settings_inst()
         
         if self.settings.has_setting('side bar visible'):
             self.sidebar = self.settings.get('side bar visible')
@@ -118,11 +119,7 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
         folder_name = self.data_widget.list.get_selected_item()
         data_name = self.data_tree_widget.current_name
         
-        tree_item = self.data_tree_widget.currentItem()
-        parent_item = tree_item.parent()
-        parent_folder = ''
-        if parent_item:
-            parent_folder = parent_item.text(0)
+        
         
         process_inst = process.Process()
         
@@ -130,7 +127,6 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
             folder_name = None
         
         process_inst.set_directory(self.directory)
-        process_inst.set_data_parent_folder(parent_folder)
         process_inst.open_data(data_name, folder_name)
         
     def _set_title(self, title = None):
@@ -172,16 +168,12 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
         if x_value < width * .8:
             self.splitter.setSizes([1,1])
         
-    def _add_data(self, data_name, folder_item = None):
+    def _add_data(self, data_name):
         
-        if not folder_item:
-            self._refresh_data(data_name)
-            
-            self.data_tree_widget._rename_data()
-            self.data_widget.show()
-        if folder_item:
-            self.data_tree_widget._refresh_folder_item(folder_item, data_name)
-            
+        self._refresh_data(data_name)
+        
+        self.data_tree_widget._rename_data()
+        self.data_widget.show()
         
     def _refresh_data(self, data_name):
         self.data_tree_widget._load_data(new_data = data_name)
@@ -204,61 +196,44 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
             
             item_name = str(item.text(0))
             
-            is_folder = False
+            process_tool = process.Process()
+            process_tool.set_directory(self.directory)
+            process_tool.cache_data_type_read(item_name)
             
-            if item.text(1) == 'Folder':
-                is_folder = True
-            
-            if not is_folder:
+            try:
+                is_data = process_tool.is_data_folder(item_name)
                 
-                parent_item = item.parent()
-                
-                parent_folder = None
-                
-                if parent_item:
-                    parent_folder = parent_item.text(0)
-                
-                process_tool = process.Process()
-                process_tool.set_directory(self.directory)
-                process_tool.set_data_parent_folder(parent_folder)
-                process_tool.cache_data_type_read(item_name)
-                
-                try:
-                    is_data = process_tool.is_data_folder(item_name)
+                if is_data:
                     
-                    if is_data:
-                        
-                        data_type = process_tool.get_data_type(item_name)
-                        
-                        keys = file_widgets.keys()
-                        
-                        for key in keys:
-                            if key == data_type:
-                                widget = file_widgets[key]()
+                    data_type = process_tool.get_data_type(item_name)
+                    
+                    keys = file_widgets.keys()
+                    
+                    for key in keys:
+                        if key == data_type:
+                            widget = file_widgets[key]()
+                            
+                            if hasattr(widget, 'add_tool_tabs'):
+                                widget.add_tool_tabs()
                                 
-                                if hasattr(widget, 'add_tool_tabs'):
-                                    widget.add_tool_tabs()
-                                path_to_data = None
-                                path_to_data = util_file.join_path(process_tool.get_data_path(), item_name  )
-                                if not path_to_data:
-                                    continue
-                                self.data_widget.add_file_widget(widget, path_to_data)
-                                self.data_widget.show()
-                                if self.data_widget.list:
-                                    self.data_widget.list.set_directory(path_to_data)
-                                    self.data_widget.list.select_current_sub_folder()
-                                self._set_title( item_name ) 
-                                self.label.show()
-                                
-                                break
-                                
-                    if not is_data:
-                        item = None
-                except:
-                    status = traceback.format_exc()
-                    util.error(status)
-                      
-                process_tool.delete_cache_data_type_read(item_name)
+                            path_to_data = vtool.util_file.join_path(process_tool.get_data_path(), item_name  )
+                            self.data_widget.add_file_widget(widget, path_to_data)
+                            self.data_widget.show()
+                            if self.data_widget.list:
+                                self.data_widget.list.set_directory(path_to_data)
+                                self.data_widget.list.select_current_sub_folder()
+                            self._set_title( item_name ) 
+                            self.label.show()
+                            
+                            break
+                            
+                if not is_data:
+                    item = None
+            except:
+                status = traceback.format_exc()
+                vtool.util.error(status)
+                  
+            process_tool.delete_cache_data_type_read(item_name)
           
         if not item:
             if not self.data_widget.file_widget:
@@ -274,7 +249,7 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
         
         self.data_widget.set_directory(directory)
         
-        basename = util_file.get_basename(directory)
+        basename = vtool.util_file.get_basename(directory)
         
         self._set_title(basename)
         
@@ -293,14 +268,14 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
     def clear_data(self):
         self.set_directory('')
 
-class DataWidget(qt_ui.BasicWidget):
+class DataWidget(vtool.qt_ui.BasicWidget):
     
     copy_to_top = qt.create_signal()
     copy_from_top = qt.create_signal()
     
-    data_updated = qt_ui.create_signal()
+    data_updated = vtool.qt_ui.create_signal()
     
-    open_sub_folder = qt_ui.create_signal()
+    open_sub_folder = vtool.qt_ui.create_signal()
     
     def __init__(self,parent = None, scroll = False):
         self.file_widget = None
@@ -308,22 +283,21 @@ class DataWidget(qt_ui.BasicWidget):
         
         self.setMinimumHeight(100)
         self.directory = None
-        
     
     def _define_main_layout(self):
-        return qt.QHBoxLayout()
+        return vtool.qt.QHBoxLayout()
         
     def _build_widgets(self):
         
         self.list = None
         
-        self.file_widget = qt_ui.BasicWidget()
+        self.file_widget = vtool.qt_ui.BasicWidget()
         self.main_layout.addWidget(self.file_widget)
         
     def _data_updated(self):
         self.data_updated.emit()
         
-    def _set_file_widget_directory(self, directory, sub_folder = None):
+    def _set_file_widget_directory(self, directory):
         
         if not self.file_widget:
             return
@@ -334,9 +308,7 @@ class DataWidget(qt_ui.BasicWidget):
         
         if hasattr(self.file_widget, 'set_directory'):
             self.file_widget.set_directory(folder)
-            
-            log.info('Setting temp sub folder: %s' % sub_folder)
-            self.file_widget.set_temp_sub_folder(sub_folder)
+        
         
     def _remove_widget(self, widget):
         
@@ -383,6 +355,8 @@ class DataWidget(qt_ui.BasicWidget):
             policy.setHorizontalPolicy(policy.Minimum)
             policy.setVerticalPolicy(policy.Minimum)
             
+            #policy.setHorizontalStretch(0)
+        
             self.list.setSizePolicy(policy)
             
             self.list.list.itemDoubleClicked.connect(self._open_sub_folder)
@@ -417,7 +391,7 @@ class DataWidget(qt_ui.BasicWidget):
         self._set_file_widget_directory(directory)
         
 
-class SubFolders(qt_ui.AddRemoveDirectoryList):
+class SubFolders(vtool.qt_ui.AddRemoveDirectoryList):
     
     copy_to_top_signal = qt.create_signal()
     copy_from_top_signal = qt.create_signal()
@@ -484,22 +458,22 @@ class SubFolders(qt_ui.AddRemoveDirectoryList):
     def _copy_from_top(self):
         self.copy_from_top_signal.emit()
 
-class DataTreeWidget(qt_ui.FileTreeWidget):
+class DataTreeWidget(vtool.qt_ui.FileTreeWidget):
     
-    active_folder_changed = qt_ui.create_signal(object)
-    data_added = qt_ui.create_signal(object, object)
+    active_folder_changed = vtool.qt_ui.create_signal(object)
+    data_added = vtool.qt_ui.create_signal(object)
     
     def __init__(self):     
         super(DataTreeWidget, self).__init__()
         
-        if qt_ui.is_pyside():
+        if vtool.qt_ui.is_pyside():
             self.header().setResizeMode(0, qt.QHeaderView.Stretch)
             self.header().setResizeMode(1, qt.QHeaderView.Stretch)
-        if qt_ui.is_pyside2():
+        if vtool.qt_ui.is_pyside2():
             self.header().setSectionResizeMode(0, qt.QHeaderView.Stretch)
             self.header().setSectionResizeMode(1, qt.QHeaderView.Stretch)
         self.header().setStretchLastSection(False)
-        self._expand_active = True
+        
         self.text_edit = False
         
         self.directory = None
@@ -517,7 +491,7 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
         self.setAlternatingRowColors(True)
         
-        self.setIndentation(15)
+        self.setIndentation(2)
         
         self.setWhatsThis('The data list.\n'
                           '\n'
@@ -530,42 +504,15 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
     
     def resizeEvent(self, event):
         super(DataTreeWidget, self).resizeEvent(event)
-    
-    def _refresh_folder_item(self, item, item_name = None):
-        for inc in reversed(range(0,item.childCount())):
-            child_item = item.child(inc)
-            item.removeChild(child_item)
-        self._load_data(preserve_selected = True, new_data = item_name, folder_item = item)
 
-    def _item_expanded(self, item):
-        
-        if self._expand_active:
-            self._refresh_folder_item(item)
-        
     def _item_menu(self, position):
         
         item = self.itemAt(position)
-        
+            
         if item:
-        
-            parent_item = item.parent()
-            if parent_item and parent_item.text(1) == 'Folder':
-                self.folder_action.setVisible(False)
-                for menu in self.top_menus.values():
-                    menu.menuAction().setVisible(False)
-                    #menu.hide()
-            else:
-                self.folder_action.setVisible(True)
-                for menu in self.top_menus.values():
-                    menu.menuAction().setVisible(True)
-                    #menu.show()
-            if item.text(1) == 'Folder':
-                self.folder_action.setVisible(False)
-        
             self.rename_action.setVisible(True)
             self.remove_action.setVisible(True)
         if not item:
-            self.folder_action.setVisible(True)
             self.rename_action.setVisible(False)
             self.remove_action.setVisible(False)
         self.context_menu.exec_(self.viewport().mapToGlobal(position))
@@ -574,10 +521,7 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
         self.context_menu = qt.QMenu()
         
-        self.folder_action = self.context_menu.addAction('Add Folder')
-        self.context_menu.addSeparator()
-        
-        data_types = data.DataManager().get_available_types()
+        data_types = vtool.data.DataManager().get_available_types()
         
         top_menus = {}
         menu_inst = None
@@ -590,15 +534,13 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
             
             nice_name = data_name_map[data_type]
             
-            if not menu_name in top_menus:
+            if not top_menus.has_key(menu_name):
                 menu_inst = self.context_menu.addMenu(menu_name.capitalize())
                 top_menus[menu_name] = menu_inst
             else:
                 menu_inst = top_menus[menu_name]
             
             menu_inst.addAction(nice_name)
-            
-        self.top_menus = top_menus
             
         if menu_inst:
             menu_inst.triggered.connect(self._create_data)
@@ -612,67 +554,37 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         self.browse_action = self.context_menu.addAction('Browse')
         self.refresh_action = self.context_menu.addAction('Refresh')
         
-        self.folder_action.triggered.connect(self._add_folder)
         self.rename_action.triggered.connect(self._rename_data)
         self.browse_action.triggered.connect(self._browse_current_item)
         self.remove_action.triggered.connect(self._remove_current_item)
         self.refresh_action.triggered.connect(self.refresh)    
     
-    def _create_data(self, data_to_create):
+    def _create_data(self, data):
         
-        current_item = self.currentItem()
-        
-        folder_name = ''
-        folder_item = None
-        
-        if current_item.text(1) == 'Folder':
-            folder_name = str(current_item.text(0))
-            folder_item = current_item
-            
-        data_type = str(data_to_create.text())
+        data_type = str(data.text())
         data_group = 'maya'        
         
         if not data_type or not data_group:
             return
         
-        data_type = list(data_name_map.keys())[list(data_name_map.values()).index(data_type)] 
+        data_type = data_name_map.keys()[data_name_map.values().index(data_type)] 
         
-        manager = data.DataManager()
+        manager = vtool.data.DataManager()
         data_instance = manager.get_type_instance(data_type)
         data_name = data_instance._data_name()
         
         process_tool = process.Process()
         process_tool.set_directory(self.directory)
-        process_tool.set_data_parent_folder(folder_name)
         
         data_path = process_tool.create_data(data_name, data_type)
         
-        data_name = util_file.get_basename(data_path)
+        data_name = vtool.util_file.get_basename(data_path)
         
-        self.data_added.emit(data_name, folder_item)
-        
-        if folder_item:
-            self._expand_active = False
-            folder_item.setExpanded(True)
-            self._expand_active = True
+        self.data_added.emit(data_name)
+    
     
     def mouseDoubleClickEvent(self, event):
         self._browse_current_item()
-        
-    def _add_folder(self):
-        
-        process_tool = process.Process()
-        process_tool.set_directory(self.directory)
-        
-        data_path = process_tool.get_data_path()
-        
-        folder_path = util_file.create_dir('folder', data_path, make_unique = True)
-        
-        folder_name = util_file.get_basename(folder_path)
-        item = qt.QTreeWidgetItem([folder_name, 'Folder'])
-        self.addTopLevelItem(item)
-        item.setSelected(True)
-        self.setCurrentItem(item)
         
     def _rename_data(self):
         items = self.selectedItems()
@@ -686,20 +598,12 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
         old_name = old_name.split('/')[-1]
         
-        new_name = qt_ui.get_new_name('New Name', self, old_name)
+        new_name = vtool.qt_ui.get_new_name('New Name', self, old_name)
         
-        parent_item = item.parent()
-        if parent_item:
-            
-            for inc in range(0, parent_item.childCount()):
-                child_item = parent_item.child(inc)
-                if new_name == child_item.text(0):
-                    return
-        else:
-            for inc in range(0, self.topLevelItemCount()):
-                top_item = self.topLevelItem(inc)
-                if new_name == top_item.text(0):
-                    return
+        for inc in range(0, self.topLevelItemCount()):
+            top_item = self.topLevelItem(inc)
+            if new_name == top_item.text(0):
+                return
         
         if not new_name:
             return
@@ -716,14 +620,14 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         items = self.selectedItems()
         
         if not items:
-            util_file.open_browser(self.directory)
+            vtool.util_file.open_browser(self.directory)
             return
         
         item = items[0]
         
         directory = self.get_item_directory(item)
         
-        util_file.open_browser(directory)
+        vtool.util_file.open_browser(directory)
     
     def _remove_current_item(self):
         
@@ -734,38 +638,25 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
         name = items[0].text(0)
         
-        delete_permission = qt_ui.get_permission('Delete %s' % name, self)
+        delete_permission = vtool.qt_ui.get_permission('Delete %s' % name, self)
         
         if not delete_permission:
             return
         
-        parent_item = items[0].parent()
-        parent_name = ''
-        
-        if parent_item:
-            if parent_item.text(1) == 'Folder':
-                parent_name = parent_item.text(0)
         
         
-        
-        if not parent_item:
-            index = self.indexOfTopLevelItem(items[0])
-            self.takeTopLevelItem(index)
-            
-        if parent_item:
-            child_index = parent_item.indexOfChild(items[0])
-            parent_item.takeChild(child_index)
+        index = self.indexOfTopLevelItem(items[0])
+        self.takeTopLevelItem(index)
         
         #this needs to happend after the item is taken away or else data gets corrupted
         process_tool = process.Process()
         process_tool.set_directory(self.directory)
-        process_tool.set_data_parent_folder(parent_name)
         process_tool.delete_data(name)
     
     def _define_header(self):
         #data size update removed because very slow
         #return ['Name','Folder', 'Type','Size']
-        return ['Name','Type', 'Sub Folder']
+        return ['Name','Type', 'Folder']
     
     def _item_renamed(self, item, old_name):
         
@@ -774,30 +665,9 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
         name = item.text(0)
         
-        folder = False
-        
-        if item.text(1) == 'Folder':
-            
-            folder = True
-        
-        parent_folder = None
-        
-        parent_item = item.parent()
-        if parent_item:
-            if parent_item.text(1) == 'Folder':
-                parent_folder = str(parent_item.text(0))
-        
         process_tool = process.Process()
         process_tool.set_directory(self.directory)
-        process_tool.set_data_parent_folder(parent_folder)
-        
-        if not folder:
-            new_path = process_tool.rename_data(old_name, name)
-        
-        if folder:
-            data_folder = process_tool.get_data_path()
-            old_path = util_file.join_path(data_folder, old_name)
-            new_path = util_file.rename(old_path, name, make_unique=True)
+        new_path = process_tool.rename_data(old_name, name)
         
         if not new_path:
             return False
@@ -808,23 +678,13 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
     
         
-    def _load_data(self, preserve_selected = True, new_data = None, folder_item = None):
+    def _load_data(self, preserve_selected = True, new_data = None):
         
+        self.clear()
         process_tool = process.Process()
         process_tool.set_directory(self.directory)
-        data_path = process_tool.get_data_path()
         
-        
-        folder = None
-        
-        if not folder_item:
-            self.clear()
-            folders = process_tool.get_data_folders()
-        else:
-            folder = folder_item.text(0)
-            process_tool.set_data_parent_folder(folder)
-            data_path = process_tool.get_data_path()
-            folders = process_tool.get_data_folders()
+        folders = process_tool.get_data_folders()
         
         log.info('Loading data files %s' % folders)
         
@@ -838,32 +698,12 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
             item = qt.QTreeWidgetItem()
             item.setText(0, foldername)
             
-            data_file = util_file.join_path(data_path, '%s/data.json' % foldername)
-            old_data_file = util_file.join_path(data_path, '%s/data.type' % foldername)
+            sub_folder, data_type = process_tool.get_data_current_sub_folder_and_type(foldername)
             
-            sub_folder = None
-            data_type = None
-            
-            if util_file.is_file(data_file):
-                
-                sub_folder, data_type = process_tool.get_data_current_sub_folder_and_type(foldername)
-            elif util_file.is_file(old_data_file):
-                sub_folder, data_type = process_tool.get_data_current_sub_folder_and_type(foldername)
-                
-            
-            sub_folders = []
-            
-            if not data_type in data_name_map:
-                #util.warning('Data folder %s has no data type.' % foldername)
-                nice_name = 'Folder'
-                sub_path = util_file.join_path(data_path, foldername)
-                sub_folders = util_file.get_folders(sub_path, recursive = False)
-                
-                if sub_folders:
-                    temp_item = qt.QTreeWidgetItem(item)
-                    
-                
-                #item.setDisabled(True)
+            if not data_name_map.has_key(data_type):
+                vtool.util.warning('Data folder %s has no data type.' % foldername)
+                nice_name = '-non vetala folder-'
+                item.setDisabled(True)
             else:
                 nice_name = data_name_map[data_type]
             
@@ -879,19 +719,14 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
             
             item.folder = foldername
             
-            if not folder:
-                self.addTopLevelItem(item)
-            if folder:
-                folder_item.addChild(item)
+            self.addTopLevelItem(item)
             
             if foldername == new_data:
                 select_item = item
         
         if select_item:
-            self._expand_active = False
             self.setItemSelected(select_item, True)
             self.setCurrentItem(select_item)
-            self._expand_active = True
         
     def update_file_size(self, item):
         return 
@@ -907,14 +742,8 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         
     def update_item(self, item):
         
-        parent_folder = None
-        parent_item = item.parent()
-        if parent_item:
-            parent_folder = parent_item.text(0)
-        
         process_tool = process.Process()
         process_tool.set_directory(self.directory)
-        process_tool.set_data_parent_folder(parent_folder)
         
         #data_dir = process_tool.get_data_path()
         
@@ -939,21 +768,11 @@ class DataTreeWidget(qt_ui.FileTreeWidget):
         for name in parent_names:
             names.append(name[0])
         
-        parent_item = item.parent()
-        is_parent_folder = False
-        if parent_item:
-            if parent_item.text(1) == 'Folder':
-                is_parent_folder = True
-            
-            
-        if not is_parent_folder:
-            names.insert(1, '.data')
-        else:
-            names.insert(2, '.data')
+        names.insert(1, '.data')
         
         names.reverse()
         
-        path = '/'.join(names)
+        path = string.join(names, '/')
         
         return path
                 
@@ -969,25 +788,25 @@ class DataSizeThread(qt.QtCore.QThread):
         """
         pass
         #was too slow
-        #data_folder = util_file.join_path(data_path, data_name)
-        #size = util_file.get_folder_size(data_folder, skip_names=['.version','.sub'])
+        #data_folder = vtool.util_file.join_path(data_path, data_name)
+        #size = vtool.util_file.get_folder_size(data_folder, skip_names=['.version','.sub'])
         
         #item.setText(3, str(size) )
         
-class DataTreeItem(qt_ui.TreeWidgetItem):
+class DataTreeItem(vtool.qt_ui.TreeWidgetItem):
     pass
 
-class DataItemWidget(qt_ui.TreeItemWidget):
+class DataItemWidget(vtool.qt_ui.TreeItemWidget):
     def __init__(self):
         super(DataItemWidget, self).__init__()
         
-class DataTypeWidget(qt_ui.BasicWidget):
+class DataTypeWidget(vtool.qt_ui.BasicWidget):
     
-    data_added = qt_ui.create_signal(object)
+    data_added = vtool.qt_ui.create_signal(object)
         
     def __init__(self):
         
-        self.data_manager = data.DataManager()
+        self.data_manager = vtool.data.DataManager()
         self.directory = None
         
         super(DataTypeWidget, self).__init__()
@@ -1012,7 +831,7 @@ class DataTypeWidget(qt_ui.BasicWidget):
     def _build_widgets(self):
         self.data_type_tree_widget = DataTypeTreeWidget()
         
-        add_button = qt_ui.BasicButton('Add')
+        add_button = vtool.qt_ui.BasicButton('Add')
         add_button.setWhatsThis('This button will add the selected data type to the process.\n'
                                 'You can add each data type more than once. Eg. You can have multiple skin weight data.\n')
         #add_button = qt.QPushButton('Add')
@@ -1060,7 +879,7 @@ class DataTypeWidget(qt_ui.BasicWidget):
             
             item = self.data_type_tree_widget.topLevelItem(inc)
             
-            if str(item.text(0)) == 'Maya' and util.is_in_maya():
+            if str(item.text(0)) == 'Maya' and vtool.util.is_in_maya():
                 item.setExpanded(True)
             
     def _add(self):
@@ -1073,7 +892,7 @@ class DataTypeWidget(qt_ui.BasicWidget):
         if not data_type or not data_group:
             return
         
-        manager = data.DataManager()
+        manager = vtool.data.DataManager()
         data_instance = manager.get_type_instance(data_type)
         data_name = data_instance._data_name()
         
@@ -1082,7 +901,7 @@ class DataTypeWidget(qt_ui.BasicWidget):
         
         data_path = process_tool.create_data(data_name, data_type)
         
-        data_name = util_file.get_basename(data_path)
+        data_name = vtool.util_file.get_basename(data_path)
         
         self.data_added.emit(data_name)
         
@@ -1132,6 +951,9 @@ class DataTypeTreeWidget(qt.QTreeWidget):
         
         item = qt.QTreeWidgetItem(parent)
         item.setText(0, data_type)
+        #item.setSizeHint(0, qt.QtCore.QSize(100, 20))
+        
+        #self.addTopLevelItem(item)
         
         return item
         
@@ -1141,7 +963,7 @@ class DataTypeTreeWidget(qt.QTreeWidget):
         
         nice_name = split_type[1]
         
-        if data_type in data_name_map:
+        if data_name_map.has_key(data_type):
             nice_name = data_name_map[data_type]
         
         group_type = split_type[0].capitalize()
@@ -1182,7 +1004,7 @@ class DataTypeTreeWidget(qt.QTreeWidget):
 
 #--- data widgets
 
-class DataLinkWidget(qt_ui.BasicWidget):
+class DataLinkWidget(vtool.qt_ui.BasicWidget):
     
     
     
@@ -1243,7 +1065,7 @@ class MayaShotgunLinkWidget(DataLinkWidget):
         self.assets = self.data_class.get_assets(self.combo_project.itemText(0))
         
         if self.assets:
-            keys = list(self.assets.keys())
+            keys = self.assets.keys()
             keys.sort()
         
             for key in keys:
@@ -1440,7 +1262,7 @@ class MayaShotgunLinkWidget(DataLinkWidget):
         
     def _save_file(self):
         
-        permission = qt_ui.get_permission('Save to Shotgun as next work version?', self)
+        permission = vtool.qt_ui.get_permission('Save to Shotgun as next work version?', self)
         
         if permission:
             self.data_class.save()
@@ -1458,14 +1280,14 @@ class MayaShotgunLinkWidget(DataLinkWidget):
         self.combo_asset_type.clear()
         self.combo_asset.clear()
         
-        keys = list(self.assets.keys())
+        keys = self.assets.keys()
         keys.sort()
         
         for key in keys:
             self.combo_asset_type.addItem(key)
         
         current_text = self.combo_asset_type.currentText()
-        if current_text in self.assets:
+        if self.assets.has_key(current_text):
             assets = self.assets[current_text]
             
             assets.sort()
@@ -1479,7 +1301,7 @@ class MayaShotgunLinkWidget(DataLinkWidget):
         self.combo_asset.clear()
         
         current_text = self.combo_asset_type.currentText()
-        if current_text in self.assets:
+        if self.assets.has_key(current_text):
         
             assets = self.assets[current_text]
             assets.sort()
@@ -1516,7 +1338,7 @@ class MayaShotgunLinkWidget(DataLinkWidget):
             self.combo_task.addItem(task[0])
         
     def _define_data_class(self):
-        return data.MayaShotgunFileData()
+        return vtool.data.MayaShotgunFileData()
     
     def set_directory(self, directory):
         super(MayaShotgunLinkWidget, self).set_directory(directory)
@@ -1550,15 +1372,13 @@ class MayaShotgunLinkWidget(DataLinkWidget):
             self.combo_project.setEnabled(False)
             self.combo_task.setEnabled(False)
 
-class DataFileWidget(qt_ui.FileManagerWidget):
+class DataFileWidget(vtool.qt_ui.FileManagerWidget):
     
     def is_link_widget(self):
         return False
     
     def set_sub_folder(self, folder_name):
         #be careful to also update MayaFileWidget
-        
-        log.info('set sub folder DataFileWidget %s' % folder_name)
         
         if not self.data_class:
             return
@@ -1569,10 +1389,10 @@ class DataFileWidget(qt_ui.FileManagerWidget):
         
         super(DataFileWidget, self).set_directory(directory)
         
-        parent_path = util_file.get_dirname(directory)
-        name = util_file.get_basename(directory)
+        parent_path = vtool.util_file.get_dirname(directory)
+        name = vtool.util_file.get_basename(directory)
         
-        data_folder = data.DataFolder(name, parent_path)
+        data_folder = vtool.data.DataFolder(name, parent_path)
                         
         instance = data_folder.get_folder_data_instance()
         
@@ -1596,15 +1416,11 @@ class MayaDataFileWidget(DataFileWidget):
     def _define_export_help(self):
         return 'No help'
     
-    def _define_export_selected_help(self):
-        return 'No help'
-    
     def _define_save_widget(self):
         data_inst = MayaDataSaveFileWidget()
         
         data_inst.set_import_help(self._define_import_help())
         data_inst.set_export_help(self._define_export_help())
-        data_inst.set_export_selected_help(self._define_export_selected_help())
         
         return data_inst
         
@@ -1613,169 +1429,64 @@ class MayaDataFileWidget(DataFileWidget):
     
     
     
-class MayaDataSaveFileWidget(qt_ui.SaveFileWidget):
+class MayaDataSaveFileWidget(vtool.qt_ui.SaveFileWidget):
     
     def __init__(self, parent = None):
         self._import_help = 'No help'
-        self._import_selected_help = 'No help'
         self._export_help = 'No help'
-        self._export_selected_help = 'No help'
-        
-        self._define_hide_buttons()
-        
         super(MayaDataSaveFileWidget, self).__init__(parent)
-    
-    def _define_hide_buttons(self):
-        self._hide_export = False
-        self._hide_export_selected = False
-        self._hide_import = False
-        self._hide_import_selected = False
-    
-    def _define_main_layout(self):
-        return qt.QHBoxLayout()
+        
+        
+    def _create_button(self, name):
+        
+        button = vtool.qt_ui.BasicButton(name)
+        button.setMaximumWidth(120)
+        
+        return button
     
     def _build_widgets(self):
-        
-        button_layout = qt.QHBoxLayout()
-        button_layout.setAlignment(qt.QtCore.Qt.AlignHCenter)
-        
-        import_button = self._create_button('Import All')
+            
+        import_button = self._create_button('Import')
         import_button.clicked.connect(self._import_data)
         import_button.setWhatsThis(self._import_help)
         
-        import_selected_button = self._create_button('Import Onto Selected')
-        import_selected_button.clicked.connect(self._import_selected_data)
-        import_selected_button.setWhatsThis(self._import_selected_help)
-        
-        export_layout = qt.QVBoxLayout()
-        export_layout.setAlignment(qt.QtCore.Qt.AlignVCenter)
-        
-        export_button = self._create_button('Export All')
+        export_button = self._create_button('Export')
         export_button.clicked.connect(self._export_data)
         export_button.setWhatsThis(self._export_help)
         
-        export_selected_button = self._create_button('Export From Selected')
-        export_selected_button.clicked.connect(self._export_selected_data)
-        export_selected_button.setWhatsThis(self._export_selected_help)
-        
-        export_layout.addWidget(export_button)
-        export_layout.addSpacing(2)
-        export_layout.addWidget(export_selected_button)
-        
-        import_layout = qt.QVBoxLayout()
-        import_layout.setAlignment(qt.QtCore.Qt.AlignVCenter)
-        
-        import_layout.addWidget(import_button)
-        import_layout.addSpacing(2)
-        import_layout.addWidget(import_selected_button)
-        
         self.import_button = import_button
-        self.import_selected_button = import_selected_button
         self.export_button = export_button
-        self.export_selected_button = export_selected_button
         
-        self.export_layout = export_layout
-        self.import_layout = import_layout
-        
-        if self._hide_export:
-            self.export_button.hide()
-        if self._hide_export_selected:
-            self.export_selected_button.hide()
-        if self._hide_import:
-            self.import_button.hide()
-        if self._hide_import_selected:
-            self.import_selected_button.hide()
-        
-        button_layout.addStretch(20)
-        button_layout.addLayout(export_layout)
-        button_layout.addStretch(20)
-        button_layout.addLayout(import_layout)
-        button_layout.addStretch(40)
-        
-        self.main_layout.addLayout(button_layout)
-        self.main_layout.setAlignment(qt.QtCore.Qt.AlignCenter)
+        self.main_layout.addWidget(export_button) 
+        self.main_layout.addWidget(import_button) 
         
     def _export_data(self):
         
-        comment = qt_ui.get_comment(self)
+        comment = vtool.qt_ui.get_comment(self)
         if comment == None:
             return
         
         self.data_class.export_data(comment)
         self.file_changed.emit()
         
-    def _export_selected_data(self):
-        
-        comment = qt_ui.get_comment(self)
-        if comment == None:
-            return
-        
-        selection = []
-        
-        if util.is_in_maya():
-            import maya.cmds as cmds
-            selection = cmds.ls(sl = True)
-        
-        if not selection:
-            util.warning('Nothing selected to export')
-            return
-        
-        self.data_class.export_data(comment, selection = selection)
-        self.file_changed.emit()
-        
     def _import_data(self):
         
-        if not util_file.exists(self.data_class.get_file()):
+        if not vtool.util_file.exists(self.data_class.get_file()):
             
-            qt_ui.warning('No data to import.', self)
+            vtool.qt_ui.warning('No data to import.', self)
             return
         
         self.data_class.import_data()
-        
-    def _import_selected_data(self):
-        if not util_file.exists(self.data_class.get_file()):
-            
-            qt_ui.warning('No data to import.', self)
-            return
-        
-        selection = []
-        
-        if util.is_in_maya():
-            import maya.cmds as cmds
-            selection = cmds.ls(sl = True)
-        
-        if not selection:
-            util.warning('Nothing selected to import onto')
-            return
-        
-        self.data_class.import_data(selection = selection)
         
     def set_import_help(self, text):
         self._import_help = text
         self.import_button.setWhatsThis(text)
 
-    def set_import_selected_help(self, text):
-        self._import_selected_help = text
-        self.import_selected_button.setWhatsThis(text)
-
     def set_export_help(self, text):
         self._export_help = text
         self.export_button.setWhatsThis(text)        
-    
-    def set_export_selected_help(self, text):
-        self._export_help = text
-        self.export_selected_button.setWhatsThis(text)
-
-    def set_export_button_hidden(self):
-        self.export_button.hide()
-    def set_export_selected_button_hidden(self):
-        self.export_selected_button.hide()
-    def set_import_button_hidden(self):
-        self.import_button.hide()
-    def set_import_selected_button_hidden(self):
-        self.import_selected_button.hide()
-
-class MayaDataHistoryFileWidget(qt_ui.HistoryFileWidget):
+        
+class MayaDataHistoryFileWidget(vtool.qt_ui.HistoryFileWidget):
     
     def _open_version(self):
         
@@ -1786,15 +1497,15 @@ class MayaDataHistoryFileWidget(qt_ui.HistoryFileWidget):
             item = items[0]
         
         if not item:
-            util.warning('No version selected')
+            vtool.util.warning('No version selected')
             return
         
         version = int(item.text(0))
         
-        version_tool = util_file.VersionFile(self.directory)
+        version_tool = vtool.util_file.VersionFile(self.directory)
         version_file = version_tool.get_version_path(version)
         
-        util.show('Loading version: %s' % version_file)
+        vtool.util.show('Loading version: %s' % version_file)
         
         self.data_class.import_data(version_file)
 
@@ -1805,7 +1516,7 @@ class ScriptFileWidget(DataFileWidget):
         self.text_widget = None
     
     def _define_data_class(self):
-        return data.ScriptData()
+        return vtool.data.ScriptData()
             
     def _define_main_tab_name(self):
         return 'Script'
@@ -1822,7 +1533,7 @@ class ScriptFileWidget(DataFileWidget):
         self.save_widget.set_text_widget(widget)
         self.history_widget.set_text_widget(widget)
         
-class ScriptSaveFileWidget(qt_ui.SaveFileWidget):
+class ScriptSaveFileWidget(vtool.qt_ui.SaveFileWidget):
     def __init__(self, parent = None):
         super(ScriptSaveFileWidget, self).__init__(parent)
         
@@ -1848,12 +1559,12 @@ class ScriptSaveFileWidget(qt_ui.SaveFileWidget):
         
         """
         if not self.text_widget.is_modified():
-            qt_ui.warning('No changes to save.', self)
+            vtool.qt_ui.warning('No changes to save.', self)
             return
         """
         text = self.text_widget.toPlainText()
         
-        settings = util_file.get_vetala_settings_inst()
+        settings = vtool.util_file.get_vetala_settings_inst()
         
         popup_save = True
         
@@ -1864,14 +1575,14 @@ class ScriptSaveFileWidget(qt_ui.SaveFileWidget):
         
         if popup_save:
             if comment == None or comment == False:
-                comment = qt_ui.get_comment(parent, title = 'Save %s' % self.data_class.name)
+                comment = vtool.qt_ui.get_comment(parent, title = 'Save %s' % self.data_class.name)
             
             if comment == None:
                 return
         if not popup_save:
             comment = 'code update'
         
-        lines= util_file.get_text_lines(text)
+        lines= vtool.util_file.get_text_lines(text)
         
         self.data_class.save(lines,comment)
         
@@ -1885,7 +1596,7 @@ class ScriptSaveFileWidget(qt_ui.SaveFileWidget):
     def set_text_widget(self, text_widget):
         self.text_widget = text_widget
 
-class ScriptHistoryFileWidget(qt_ui.HistoryFileWidget):
+class ScriptHistoryFileWidget(vtool.qt_ui.HistoryFileWidget):
     
     def _open_version(self):
         
@@ -1896,12 +1607,12 @@ class ScriptHistoryFileWidget(qt_ui.HistoryFileWidget):
             item = items[0]
         
         if not item:
-            util.warning('No version selected')
+            vtool.util.warning('No version selected')
             return
         
         version = int(item.text(0))
         
-        version_tool = util_file.VersionFile(self.directory)
+        version_tool = vtool.util_file.VersionFile(self.directory)
         version_file = version_tool.get_version_path(version)
         
         in_file = qt.QtCore.QFile(version_file)
@@ -1909,10 +1620,7 @@ class ScriptHistoryFileWidget(qt_ui.HistoryFileWidget):
         if in_file.open(qt.QtCore.QFile.ReadOnly | qt.QtCore.QFile.Text):
             text = in_file.readAll()
             
-            if util.python_version < 3:
-                text = str(text)
-            else:
-                text = str(text, 'utf-8')
+            text = str(text)
             
             self.text_widget.setPlainText(text)
             
@@ -1927,24 +1635,19 @@ class ControlCvFileWidget(MayaDataFileWidget):
     def _build_widgets(self):
         super(ControlCvFileWidget, self)._build_widgets()
         
-        if util.is_in_maya():
-            from ..maya_lib.ui_lib import ui_rig        
+        if vtool.util.is_in_maya():
+            from vtool.maya_lib.ui_lib import ui_rig        
             self.add_tab(ui_rig.ControlWidget(), 'Tools')
     
     def _define_import_help(self):
         return 'Tries to import control cv positions from exported data. If the control no longer exists it will print a warning.'
     
-    def _define_import_selected_help(self):
-        return 'Tries to import control cv positions from exported data onto the selected nurbs surface. If the control no longer exists it will print a warning.'
-    
     def _define_export_help(self):
         return 'Automatically finds the controls in the scene and exports their cv positions relative to the transformation matrix.  Meaning you can pose the character and still export cvs without worrying.'
     
-    def _define_export_selected_help(self):
-        return 'Export the selected cvs positions relative to the transforms matrix.  Controls that were exported previously will remain in the data.'
     
     def _define_data_class(self):
-        return data.ControlCvData()
+        return vtool.data.ControlCvData()
     
     def _define_option_widget(self):
         return ControlCvOptionFileWidget()
@@ -1954,7 +1657,7 @@ class ControlCvFileWidget(MayaDataFileWidget):
 
 
 
-class ControlCvOptionFileWidget(qt_ui.OptionFileWidget):
+class ControlCvOptionFileWidget(vtool.qt_ui.OptionFileWidget):
     
     def _define_remove_button(self):
         return 'Delete Curve Cv Data'
@@ -2039,7 +1742,7 @@ class ControlCvOptionFileWidget(qt_ui.OptionFileWidget):
     
 class ControlColorFileWidget(MayaDataFileWidget):
     def _define_data_class(self):
-        return data.ControlColorData()
+        return vtool.data.ControlColorData()
     
     def _define_io_tip(self):
         return """This will export/import control colors.
@@ -2061,9 +1764,9 @@ class SkinWeightFileWidget(MayaDataFileWidget):
     def __init__(self):
         super(SkinWeightFileWidget, self).__init__()
 
-        if util.is_in_maya():
+        if vtool.util.is_in_maya():
             
-            from ..maya_lib.ui_lib import ui_rig
+            from vtool.maya_lib.ui_lib import ui_rig
             widget = ui_rig.SkinWidget(scroll = True)
             
             self.add_tab(widget, 'Tools')
@@ -2085,182 +1788,12 @@ class SkinWeightFileWidget(MayaDataFileWidget):
         return SkinWeightOptionFileWidget()
         
     def _define_data_class(self):
-        return data.SkinWeightData()
+        return vtool.data.SkinWeightData()
     
     def _define_main_tab_name(self):
         return 'Skin Weights'
-        
-    def _define_save_widget(self):
-        return SaveSkinFileWidget()
     
-
-    
-
-class SaveSkinFileWidget(MayaDataSaveFileWidget):
-    
-    def _define_main_layout(self):
-        return qt.QVBoxLayout()
-    
-    def _build_widgets(self):
-        super(SaveSkinFileWidget, self)._build_widgets()
-        
-        
-        h_sub_layout = qt.QHBoxLayout()
-        sub_layout = qt.QVBoxLayout()
-        
-        version_up = qt.QCheckBox('Version Up on Export')
-        single_file = qt.QCheckBox('Single File')
-        blend_weights = qt.QCheckBox('Dual Quaternion Blend Weights')
-        
-        sub_layout.addStretch(1)
-        sub_layout.addWidget(blend_weights)
-        sub_layout.addWidget(version_up)
-        sub_layout.addWidget(single_file)
-        sub_layout.addStretch(1)
-        
-        h_sub_layout.addStretch(1)
-        h_sub_layout.addLayout(sub_layout)
-        h_sub_layout.addStretch(1)
-        
-        self.main_layout.insertStretch(0, 1)
-        self.main_layout.addSpacing(10)
-        self.main_layout.addLayout(h_sub_layout)
-        self.main_layout.addStretch(1)
-        
-        self.version_up = version_up
-        self.single_file = single_file
-        self.blend_weights = blend_weights
-        
-        self.version_up.setChecked(True)
-        self.blend_weights.setChecked(True)
-        
-
-        blend_weights.stateChanged.connect(self._set_blend_weights)
-        version_up.stateChanged.connect(self._set_version_up)
-        single_file.stateChanged.connect(self._set_single_file)
-        
-    def _export_data(self):
-        
-        version_up = True
-        single_file = False
-        blend_weights = False
-        
-        if self.data_class.settings.has_setting('version up'):
-            version_up = self.data_class.settings.get('version up')
-            
-        if self.data_class.settings.has_setting('single file'):
-            single_file = self.data_class.settings.get('single file')
-        
-        if self.data_class.settings.has_setting('blend weights'):
-            blend_weights = self.data_class.settings.get('blend weights')
-        
-        comment = None
-        
-        if version_up:
-            comment = qt_ui.get_comment(self)
-            if comment == None:
-                return
-        
-        self.data_class.export_data(comment, single_file = single_file, version_up = version_up, blend_weights = blend_weights)
-        self.file_changed.emit()
-        
-    def _export_selected_data(self):
-        version_up = True
-        single_file = False
-        blend_weights = False
-        
-        if self.data_class.settings.has_setting('version up'):
-            version_up = self.data_class.settings.get('version up')
-            
-        if self.data_class.settings.has_setting('single file'):
-            single_file = self.data_class.settings.get('single file')
-        
-        if self.data_class.settings.has_setting('blend weights'):
-            blend_weights = self.data_class.settings.get('blend weights')
-        
-        comment = None
-        
-        if version_up:
-            comment = qt_ui.get_comment(self)
-            if comment == None:
-                return
-        
-        if util.is_in_maya():
-            import maya.cmds as cmds
-            selection = cmds.ls(sl = True)
-        
-        self.data_class.export_data(comment, selection = selection, single_file = single_file, version_up = version_up, blend_weights = blend_weights)
-        self.file_changed.emit()
-
-        
-    def _import_data(self):
-        
-        if not util_file.exists(self.data_class.get_file()):
-            
-            qt_ui.warning('No data to import.', self)
-            return
-        
-        self.data_class.import_data()
-        
-    def _import_selected_data(self):
-        if not util_file.exists(self.data_class.get_file()):
-            
-            qt_ui.warning('No data to import.', self)
-            return
-        
-        if util.is_in_maya():
-            import maya.cmds as cmds
-            selection = cmds.ls(sl = True)
-        
-        self.data_class.import_data(selection = selection)
-        
-    def set_directory(self, directory, data_class=None):
-        super(SaveSkinFileWidget, self).set_directory(directory, data_class)
-        
-        version_up_state = self.data_class.settings.get('version up')
-        
-        #need to check if it exists. Otherwise it comes in false and sets the checkbox false.
-        if not version_up_state and self.data_class.settings.has_setting('version up'):
-            self.version_up.setChecked(False)
-
-        single_file_state = self.data_class.settings.get('single file')
-        
-        if single_file_state:
-            self.single_file.setChecked(True)
-
-        blend_weight_state = self.data_class.settings.get('blend weights')
-        
-        #need to check if it exists. Otherwise it comes in false and sets the checkbox false.
-        if not blend_weight_state and self.data_class.settings.has_setting('blend weights'):
-            self.blend_weights.setChecked(False)
-
-    def _set_blend_weights(self):
-        state = self.blend_weights.checkState()
-        
-        if state == qt.QtCore.Qt.Checked:
-            self.data_class.set_blend_weights(True)
-        else:
-            self.data_class.set_blend_weights(False)
-
-    def _set_version_up(self):
-        
-        state = self.version_up.checkState()
-        
-        if state == qt.QtCore.Qt.Checked:
-            self.data_class.set_version_up(True)
-        else:
-            self.data_class.set_version_up(False)
-    
-    def _set_single_file(self):
-        
-        state = self.single_file.checkState()
-        
-        if state == qt.QtCore.Qt.Checked:
-            self.data_class.set_single_file(True)
-        else:
-            self.data_class.set_single_file(False)
-
-class SkinWeightOptionFileWidget(qt_ui.OptionFileWidget):
+class SkinWeightOptionFileWidget(vtool.qt_ui.OptionFileWidget):
     
     def _build_widgets(self):
         super(SkinWeightOptionFileWidget, self)._build_widgets()
@@ -2341,78 +1874,31 @@ class SkinWeightOptionFileWidget(qt_ui.OptionFileWidget):
             self.mesh_list.addItem(item)
       
 class DeformerWeightFileWidget(MayaDataFileWidget):
-    
-    def _build_widgets(self):
-        super(DeformerWeightFileWidget, self)._build_widgets()
-        
-        self.save_widget.set_import_selected_button_hidden()
-    
     def _define_data_class(self):
-        return data.DeformerWeightData()
+        return vtool.data.DeformerWeightData()
     
     def _define_main_tab_name(self):
         return 'Deformer Weights'
 
 class BlendShapeWeightFileWidget(MayaDataFileWidget):
-    def _build_widgets(self):
-        super(BlendShapeWeightFileWidget, self)._build_widgets()
-        
-        self.save_widget.set_export_button_hidden()
-        self.save_widget.set_import_selected_button_hidden()
-    
     def _define_data_class(self):
-        return data.BlendshapeWeightData()
+        return vtool.data.BlendshapeWeightData()
     
     def _define_main_tab_name(self):
         return 'BlendShape Weights'
       
 class AnimationFileWidget(MayaDataFileWidget):
     
-    def _define_save_widget(self):
-        return AnimationSaveWidget()
-    
-    def _build_widgets(self):
-        super(AnimationFileWidget, self)._build_widgets()
-        
-        self.save_widget.set_import_selected_button_hidden()
-        
-        
-        
-    
     def _define_data_class(self):
-        return data.AnimationData()
+        return vtool.data.AnimationData()
     
     def _define_main_tab_name(self):
         return 'Animation Keyframes'
     
-class AnimationSaveWidget(MayaDataSaveFileWidget):
-    
-    
-    
-    def _build_widgets(self):
-        super(AnimationSaveWidget, self)._build_widgets()
-        
-        self.namesapce = qt_ui.GetString('Namespace ')
-        
-        self.import_layout.addWidget(self.namesapce)
-        
-    def _import_data(self):
-        
-        self.data_class.set_namespace(self.namesapce.get_text())
-        super(AnimationSaveWidget, self)._import_data()
-        
-    def _import_selected_data(self):
-        
-        self.data_class.set_namespace(self.namesapce.get_text())
-        super(AnimationSaveWidget, self)._import_selected_data()
-    
 class ControlAnimationFileWidget(MayaDataFileWidget):
-    def _build_widgets(self):
-        super(ControlAnimationFileWidget, self)._build_widgets()
-        self.save_widget.set_import_selected_button_hidden()
-    
     def _define_data_class(self):
-        return data.ControlAnimationData()
+        return vtool.data.ControlAnimationData()
+        
     
     def _define_main_tab_name(self):
         return 'Control Animation Keyframes'
@@ -2421,7 +1907,7 @@ class ControlAnimationFileWidget(MayaDataFileWidget):
 class AtomFileWidget(MayaDataFileWidget):
     
     def _define_data_class(self):
-        return data.AtomData()
+        return vtool.data.AtomData()
     
     def _define_main_tab_name(self):
         return 'ATOM file'
@@ -2432,19 +1918,13 @@ class PoseFileWidget(MayaDataFileWidget):
         return MayaPoseSaveFileWidget()
     
     def _define_data_class(self):
-        return data.PoseData()
+        return vtool.data.PoseData()
     
     def _define_main_tab_name(self):
         return 'Pose Targets'
         
 class MayaPoseSaveFileWidget(MayaDataSaveFileWidget):
-
-    def _define_hide_buttons(self):
-        self._hide_export = False
-        self._hide_export_selected = True
-        self._hide_import = False
-        self._hide_import_selected = True
-
+            
     def _export_data(self):
 
         comment = ''
@@ -2454,7 +1934,7 @@ class MayaPoseSaveFileWidget(MayaDataSaveFileWidget):
         
     def _import_data(self):
         
-        from ..maya_lib import ui_core
+        from vtool.maya_lib import ui_core
         ui_core.delete_scene_script_jobs()
         self.data_class.import_data()
         ui_core.create_scene_script_jobs()
@@ -2462,47 +1942,26 @@ class MayaPoseSaveFileWidget(MayaDataSaveFileWidget):
         
 class MayaShadersFileWidget(MayaDataFileWidget):
     
-    def _build_widgets(self):
-        super(MayaShadersFileWidget, self)._build_widgets()
-    
-    def _define_save_widget(self):
-        return MayaSaveShadersFileWidget()
-    
     def _define_data_class(self):
-        return data.MayaShadersData()
+        return vtool.data.MayaShadersData()
 
     def _define_main_tab_name(self):
         return 'Maya Shaders'
-
-class MayaSaveShadersFileWidget(MayaDataSaveFileWidget):
     
-    def _build_widgets(self):
-        super(MayaSaveShadersFileWidget, self)._build_widgets()
-        
-        clear_shaders = qt.QPushButton('Remove All Shaders in Scene')
-        clear_shaders.clicked.connect(self._clear_shaders)
-        
-        self.import_layout.addSpacing(10)
-        self.import_layout.addWidget(clear_shaders)
-        
-    def _clear_shaders(self):
-        maya_lib.shade.reset()
-
 class MayaAttributesFileWidget(MayaDataFileWidget):
     
     def _build_widgets(self):
         super(MayaAttributesFileWidget, self)._build_widgets()
-        self.save_widget.set_export_button_hidden()
-        
+            
     def _define_data_class(self):
-        return data.MayaAttributeData()
+        return vtool.data.MayaAttributeData()
 
     def _define_main_tab_name(self):
         return 'Maya Attributes'
 
 class MayaControlAttributesFileWidget(MayaDataFileWidget):
     def _define_data_class(self):
-        return data.MayaControlAttributeData()
+        return vtool.data.MayaControlAttributeData()
 
     def _define_main_tab_name(self):
         return 'Maya Control Values'
@@ -2510,12 +1969,12 @@ class MayaControlAttributesFileWidget(MayaDataFileWidget):
 
 class MayaControlRotateOrderFileWidget(MayaDataFileWidget):
     def _define_data_class(self):
-        return data.MayaControlRotateOrderData()
+        return vtool.data.MayaControlRotateOrderData()
 
     def _define_main_tab_name(self):
         return 'Maya Control RotateOrder'
 
-class MayaFileWidget(qt_ui.FileManagerWidget):
+class MayaFileWidget(vtool.qt_ui.FileManagerWidget):
 
     def __init__(self, add_tools = False):
         super(MayaFileWidget, self).__init__()
@@ -2530,8 +1989,8 @@ class MayaFileWidget(qt_ui.FileManagerWidget):
         return MayaHistoryFileWidget()
 
     def add_tool_tabs(self):        
-        if util.is_in_maya():
-            from ..maya_lib.ui_lib import ui_rig
+        if vtool.util.is_in_maya():
+            from vtool.maya_lib.ui_lib import ui_rig
         
             self.add_tab(ui_rig.StructureWidget(), 'Structure')
             self.add_tab(ui_rig.DeformWidget(), 'Deformation')
@@ -2540,25 +1999,36 @@ class MayaFileWidget(qt_ui.FileManagerWidget):
         return False
 
     def set_sub_folder(self, folder_name):
-        log.info('set sub folder %s' % folder_name)
         self.data_class.set_sub_folder(folder_name)
-        
+
+
+    
 class MayaAsciiFileWidget(MayaFileWidget):
     
     def _define_main_tab_name(self):
         return 'Maya Ascii File'
     
     def _define_data_class(self):
-        return data.MayaAsciiFileData()
+        return vtool.data.MayaAsciiFileData()
 
 class MayaBinaryFileWidget(MayaFileWidget):
     def _define_main_tab_name(self):
         return 'Maya Binary File'
 
     def _define_data_class(self):
-        return data.MayaBinaryFileData()
+        return vtool.data.MayaBinaryFileData()
         
-class MayaSaveFileWidget(qt_ui.SaveFileWidget):
+class MayaSaveFileWidget(vtool.qt_ui.SaveFileWidget):
+    
+    def _create_button(self, name):
+        
+        button = vtool.qt_ui.BasicButton(name)
+        #button = qt.QPushButton(name)
+        
+        button.setMaximumWidth(100)
+        button.setMinimumWidth(100)
+        
+        return button
     
     def _build_widgets(self):
         
@@ -2590,14 +2060,8 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         
         reference_button.setWhatsThis('Reference the previously saved file.')
         
-        remove_all_references = self._create_button('Remove All References')
-        remove_all_references.setWhatsThis('Convenience to remove all references before saving.')
-        
         save_button.setMinimumHeight(50)
-        save_button.setMaximumHeight(50)
-        
         open_button.setMinimumHeight(50)
-        open_button.setMaximumHeight(50)
         
         save_button.clicked.connect( self._save_file )
         export_button.clicked.connect( self._export_file )
@@ -2605,7 +2069,6 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         open_button.clicked.connect( self._open_file )
         import_button.clicked.connect( self._import_file )
         reference_button.clicked.connect( self._reference_file )
-        remove_all_references.clicked.connect(self._remove_all_references)
         
         v_layout1.addWidget(save_button)
         v_layout1.addWidget(export_button)
@@ -2614,8 +2077,6 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         v_layout2. addWidget(open_button)
         v_layout2.addWidget(import_button)
         v_layout2.addWidget(reference_button)
-        v_layout2.addSpacing(5)
-        v_layout2.addWidget(remove_all_references)
         
         h_layout.addStretch(20)
         h_layout.addLayout(v_layout1)
@@ -2631,18 +2092,18 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         self.main_layout.setAlignment(qt.QtCore.Qt.AlignCenter)
 
     def _skip_mismatch_file(self):
-        if util.is_in_maya():
+        if vtool.util.is_in_maya():
             
             import maya.cmds as cmds
             current_directory = cmds.file(q = True, expandName = True)
             
-            test_directory = util_file.get_dirname(self.directory)
+            test_directory = vtool.util_file.get_dirname(self.directory)
             
             if current_directory.endswith('unknown') or current_directory.endswith('untitled'):
                 return False
             
             if not current_directory.startswith(test_directory):
-                result = qt_ui.get_permission('Root directory different.\nAre you sure you are saving to the right place?', self)
+                result = vtool.qt_ui.get_permission('Root directory different.\nAre you sure you are saving to the right place?', self)
             
                 if result:
                     return False
@@ -2657,7 +2118,7 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         if self._skip_mismatch_file():
             return
         
-        comment = qt_ui.get_comment(self)
+        comment = vtool.qt_ui.get_comment(self)
         
         if comment == None:
             return
@@ -2677,7 +2138,7 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         if self._skip_mismatch_file():
             return
         
-        comment = qt_ui.get_comment(self)
+        comment = vtool.qt_ui.get_comment(self)
         
         if comment == None:
             return
@@ -2687,34 +2148,34 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         self.file_changed.emit()
         
     def _auto_save(self):
-        if not util.is_in_maya():
+        if not vtool.util.is_in_maya():
             return
         
         import maya.cmds as cmds
         
         filepath = cmds.file(q = True, sn = True)
         
-        from ..maya_lib import core
+        from vtool.maya_lib import core
         saved = core.save(filepath)
         
         return saved
     
     def _open_file(self):
         
-        if not util_file.is_file(self.data_class.get_file()):
-            qt_ui.warning('No data to open. Please save once.', self)
+        if not vtool.util_file.is_file(self.data_class.get_file()):
+            vtool.qt_ui.warning('No data to open. Please save once.', self)
             return
         
-        if util.is_in_maya():
+        if vtool.util.is_in_maya():
             import maya.cmds as cmds
             if cmds.file(q = True, mf = True):
                 
                 filepath = cmds.file(q = True, sn = True)
                 
-                process_path = util.get_env('VETALA_CURRENT_PROCESS')
-                filepath = util_file.remove_common_path_simple(process_path, filepath)
+                process_path = vtool.util.get_env('VETALA_CURRENT_PROCESS')
+                filepath = vtool.util_file.remove_common_path_simple(process_path, filepath)
                 
-                result = qt_ui.get_save_permission('Save changes?', self, filepath)
+                result = vtool.qt_ui.get_save_permission('Save changes?', self, filepath)
                 
                 if result:
                     saved = self._auto_save()
@@ -2729,27 +2190,20 @@ class MayaSaveFileWidget(qt_ui.SaveFileWidget):
         
     def _import_file(self):
 
-        if not util_file.is_file(self.data_class.get_file()):
-            qt_ui.warning('No data to import. Please save once.', self)
+        if not vtool.util_file.is_file(self.data_class.get_file()):
+            vtool.qt_ui.warning('No data to import. Please save once.', self)
             return
         self.data_class.import_data()
         
     def _reference_file(self):
         
-        if not util_file.is_file(self.data_class.get_file()):
-            qt_ui.warning('No data to reference. Please save once.', self)
+        if not vtool.util_file.is_file(self.data_class.get_file()):
+            vtool.qt_ui.warning('No data to reference. Please save once.', self)
             return
         self.data_class.maya_reference_data()
-    
-    def _remove_all_references(self):
         
-        if util.is_in_maya():
-            import maya.cmds as cmds
-            reference_nodes = cmds.ls(type = 'reference')
-            for reference_node in reference_nodes:
-                maya_lib.core.remove_reference(reference_node)
         
-class MayaHistoryFileWidget(qt_ui.HistoryFileWidget):
+class MayaHistoryFileWidget(vtool.qt_ui.HistoryFileWidget):
     def _build_widgets(self):
         
         super(MayaHistoryFileWidget, self)._build_widgets()
@@ -2775,15 +2229,15 @@ class MayaHistoryFileWidget(qt_ui.HistoryFileWidget):
             item = items[0]
         
         if not item:
-            util.warning('No version selected')
+            vtool.util.warning('No version selected')
             return
         
         version = int(item.text(0))
         
-        version_tool = util_file.VersionFile(self.directory)
+        version_tool = vtool.util_file.VersionFile(self.directory)
         version_file = version_tool.get_version_path(version)
         
-        maya_file = data.MayaFileData()
+        maya_file = vtool.data.MayaFileData()
         maya_file.open(version_file)
         
     def _import_version(self):
@@ -2793,15 +2247,15 @@ class MayaHistoryFileWidget(qt_ui.HistoryFileWidget):
         if items:
             item = items[0]
         if not item:
-            util.warning('No version selected')
+            vtool.util.warning('No version selected')
             return
         
         version = int(item.text(0))
         
-        version_tool = util_file.VersionFile(self.directory)
+        version_tool = vtool.util_file.VersionFile(self.directory)
         version_file = version_tool.get_version_path(version)
         
-        maya_file = data.MayaFileData()
+        maya_file = vtool.data.MayaFileData()
         maya_file.import_data(version_file)
         
     def _reference_version(self):
@@ -2811,21 +2265,21 @@ class MayaHistoryFileWidget(qt_ui.HistoryFileWidget):
         if items:
             item = items[0]
         if not item:
-            util.warning('No version selected')
+            vtool.util.warning('No version selected')
             return
                             
         version = int(item.text(0))
         
-        version_tool = util_file.VersionFile(self.directory)
+        version_tool = vtool.util_file.VersionFile(self.directory)
         version_file = version_tool.get_version_path(version)
         
-        maya_file = data.MayaFileData()
+        maya_file = vtool.data.MayaFileData()
         maya_file.maya_reference_data(version_file)
 
 class ProcessBuildDataWidget(MayaFileWidget):
     
-    ascii_data = data.MayaAsciiFileData()
-    binary_data = data.MayaBinaryFileData()
+    ascii_data = vtool.data.MayaAsciiFileData()
+    binary_data = vtool.data.MayaBinaryFileData()
     
     def __init__(self):
         
@@ -2848,7 +2302,7 @@ class ProcessBuildDataWidget(MayaFileWidget):
         
         log.debug('Update build data folder')
         
-        data_folder = data.DataFolder('build', data_directory)
+        data_folder = vtool.data.DataFolder('build', data_directory)
         
         data_type = data_folder.get_data_type()
         
@@ -2869,12 +2323,13 @@ class ProcessBuildDataWidget(MayaFileWidget):
         
         self.save_widget.set_data_class(data_class)
     
+    
 class ProcessSaveFileWidget(MayaSaveFileWidget):
     
     def _build_widgets(self):
         
         save_button = self._create_button('Save')
-        save_button.setMinimumWidth(qt_ui._save_button_minimum)
+        save_button.setMinimumWidth(vtool.qt_ui._save_button_minimum)
         open_button = self._create_button('Open')
         open_button.setMinimumWidth(100)
         save_button.clicked.connect( self._save_file )
@@ -2917,3 +2372,4 @@ file_widgets = { 'maya.binary' : MayaBinaryFileWidget,
                  'maya.pose' : PoseFileWidget,
                  'maya.animation': AnimationFileWidget,
                  'maya.control_animation': ControlAnimationFileWidget}
+

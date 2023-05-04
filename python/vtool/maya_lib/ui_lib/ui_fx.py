@@ -1,22 +1,20 @@
 # Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-
-from ... import qt_ui, qt, util
+from vtool import qt_ui, qt, util
 
 
-from . import ui_character
+import ui_character
 
-from .. import attr
-from .. import fx
-from .. import anim
+from vtool.maya_lib import attr
+from vtool.maya_lib import fx
+from vtool.maya_lib import anim
 
 #this will need a function to check for deadline
 if util.has_shotgun_tank():
-    from ...render_farm import deadline
+    from vtool.render_farm import deadline
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+
+import maya.cmds as cmds
 
 class FxManager(qt_ui.BasicWidget):
     def _build_widgets(self):
@@ -295,7 +293,7 @@ class SettingTree(qt.QTreeWidget):
         
     def _update_item(self, name):
         
-        if name in self.settings:
+        if self.settings.has_key(name):
             values = self.settings[name]
             
             for value in values:

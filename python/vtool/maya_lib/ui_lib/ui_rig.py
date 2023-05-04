@@ -1,34 +1,32 @@
 # Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-from __future__ import print_function
+from vtool import qt_ui, qt
 
-from ... import qt_ui, qt
-from ... import util, util_file
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+from vtool import util_file
+from vtool import util
 
-from .. import ui_core
+from vtool.maya_lib import ui_core
 
-from .. import blendshape
-from .. import core
-from .. import geo
-from .. import attr    
-from .. import space
-from .. import deform
-from .. import rigs_util
-from .. import curve
+import maya.cmds as cmds
 
-from . import ui_check
-from . import ui_presets
-from . import ui_picker
-from . import ui_model
-from . import ui_anim
+from vtool.maya_lib import blendshape
+from vtool.maya_lib import core
+from vtool.maya_lib import geo
+from vtool.maya_lib import attr    
+from vtool.maya_lib import space
+from vtool.maya_lib import deform
+from vtool.maya_lib import rigs_util
+from vtool.maya_lib import curve
 
-from ...process_manager import ui_process_manager
-from ...ramen.ui_lib import ui_nodes
-from ...script_manager import script_view
+import ui_check
+import ui_presets
+import ui_picker
+import ui_model
+import ui_anim
+
+from vtool.process_manager import ui_process_manager
+from vtool.script_manager import script_view
 
 
 def pose_manager(shot_sculpt_only = False):
@@ -102,11 +100,6 @@ class ProcessMayaWindow(ui_core.MayaDockMixin,ui_process_manager.ProcessManagerW
     title = 'VETALA'
     def __init__(self, load_settings = False):
         super(ProcessMayaWindow, self).__init__( load_settings= load_settings)
-
-class RamenMayaWindow(ui_core.MayaDockMixin, ui_nodes.NodeWindow ):
-    title = 'RAMEN'
-    def __init__(self):
-        super(RamenMayaWindow, self).__init__()
 
 class ScriptMayaWindow(ui_core.MayaDockMixin, script_view.ScriptManagerWidget):
     title = 'Scripts'
@@ -310,19 +303,8 @@ class SkinMeshFromMesh(qt_ui.Group):
         selection = cmds.ls(sl = True)
         
         if selection and len(selection) == 2:
-            if not geo.is_a_mesh(selection[0]):
-                if not geo.is_a_surface(selection[0]):
-                    if not geo.is_a_curve(selection[0]):
-                        util.warning('Please select a mesh, surface or curve as the first selection.')
-                        return
-            
-            if not geo.is_a_mesh(selection[1]):
-                if not geo.is_a_surface(selection[1]):
-                    if not geo.is_a_curve(selection[1]):
-                        util.warning('Please select a mesh, surface or curve as the first selection.')
-                        return
-                    
-            deform.skin_mesh_from_mesh(selection[0], selection[1], exclude_joints = exclude, include_joints = include, uv_space = uv)
+            if geo.is_a_mesh(selection[0]) and geo.is_a_mesh(selection[1]):
+                deform.skin_mesh_from_mesh(selection[0], selection[1], exclude_joints = exclude, include_joints = include, uv_space = uv)
         else:
             util.warning('Please select 2 meshes that have skin clusters.')
                 
@@ -372,9 +354,6 @@ class StructureWidget(RigWidget):
         
         self.setMinimumHeight(300)
         
-        set_color = qt.QPushButton('Open Color Picker')
-        set_color.clicked.connect(self._set_color)
-        
         subdivide_joint_button =  qt_ui.GetIntNumberButton('Subdivide Joint')
         subdivide_joint_button.set_value(1)
         subdivide_joint_button.clicked.connect(self._subdivide_joint)
@@ -412,71 +391,25 @@ class StructureWidget(RigWidget):
         orient_sel_joints.setMinimumWidth(125)
         orient_sel_joints.clicked.connect(self._orient_selected_only)
         
-        auto_orient = qt.QPushButton('Auto Orient Hierarchy')
-        auto_orient.setMinimumHeight(20)
-        auto_orient.setMinimumWidth(125)
-        auto_orient.clicked.connect(self._auto_orient_attributes)
-        
-        mirror_orient = qt.QPushButton('Mirror')
-        mirror_orient.setMinimumHeight(20)
-        mirror_orient.setMinimumWidth(125)
-        mirror_orient.clicked.connect(self._mirror_orient_attributes)
-        
         self.joint_axis_check = qt.QCheckBox('Joint Axis Visibility')
         
         orient_button_layout.addWidget(orient_joints)
         orient_button_layout.addWidget(orient_hier_joints)
         orient_button_layout.addWidget(orient_sel_joints)
-        
-        
+        orient_button_layout.addWidget(self.joint_axis_check)
         
         orient_button_layout.setAlignment(qt.QtCore.Qt.AlignLeft | qt.QtCore.Qt.AlignCenter)
         
         orient_layout = qt.QHBoxLayout()
         
         sub_orient_layout = qt.QVBoxLayout()
-        
+        orient_layout.addLayout(orient_button_layout)
+        orient_layout.addSpacing(10)
+        orient_layout.addLayout(sub_orient_layout)
         
         sub_orient_layout.addWidget(add_orient)
         sub_orient_layout.addWidget(remove_orient)
-        #sub_orient_layout.addSpacing(2)
-        
-        auto_orient_group = qt_ui.Group('Auto Orient')
-        auto_orient_group.set_collapsable(False)
-        
-        orient_layout.addLayout(orient_button_layout)
-        
-        
-        sub_orient_layout.addSpacing(2)
-        sub_orient_layout.addWidget(auto_orient_group)
-        
-        orient_button_layout.addSpacing(5)
-        orient_button_layout.addWidget(self.joint_axis_check)
-        
-        orient_layout.addSpacing(5)
-        orient_layout.addLayout(sub_orient_layout)
-        
-        combo_layout = qt.QHBoxLayout()
-        combo_forward = qt.QComboBox()
-        combo_forward.addItems(['X','Y','Z'])
-        combo_forward.setCurrentIndex(2)
-        combo_up = qt.QComboBox()
-        combo_up.addItems(['X','Y','Z'])
-        combo_up.setCurrentIndex(1)
-        forward_label = qt.QLabel('Forward')
-        combo_layout.addWidget(forward_label)
-        combo_layout.addWidget(combo_forward)
-        up_label = qt.QLabel('Up')
-        combo_layout.addWidget(up_label)
-        combo_layout.addWidget(combo_up)
-        auto_orient_group.main_layout.addLayout(combo_layout)
-        auto_orient_group.main_layout.addWidget(auto_orient)
-        #auto_orient_group.main_layout.addWidget(mirror_orient)
-        self.combo_forward = combo_forward
-        self.combo_up = combo_up
-        
-        
-        sub_orient_layout.addSpacing(5)
+        sub_orient_layout.addSpacing(3)
         sub_orient_layout.addWidget(add_joint_orient)
         sub_orient_layout.addSpacing(3)
         sub_orient_layout.addWidget(skip_orient)
@@ -488,7 +421,7 @@ class StructureWidget(RigWidget):
         mirror.setMinimumHeight(40)
         mirror.setMinimumWidth(125)
         
-        mirror_sel = qt.QPushButton('Mirror Selected')
+        mirror_sel = qt.QPushButton('Mirror Selected Only')
         mirror_sel.setMinimumHeight(20)
         mirror_sel.setMinimumWidth(125)
         
@@ -506,11 +439,7 @@ class StructureWidget(RigWidget):
         mirror_right_left = qt.QPushButton('Mirror R to L')
         mirror_right_left.clicked.connect(self._mirror_r_l)
         
-        mirror_meshes = qt.QPushButton('Mirror Mesh Positions L to R')
-        mirror_meshes.clicked.connect(self._mirror_meshes)
-        
         mirror_curves = qt.QPushButton('Mirror Curves')
-        mirror_curves.clicked.connect(self._mirror_curves)
         
         mirror_invert = qt.QPushButton('Mirror Invert')
         mirror_invert.clicked.connect(self._mirror_invert)
@@ -521,12 +450,11 @@ class StructureWidget(RigWidget):
         main_mirror_layout.addWidget(mirror_sel)
         
         mirror_translate_layout.addLayout(main_mirror_layout)
-        mirror_translate_layout.addSpacing(5)
+        mirror_translate_layout.addSpacing(10)
         mirror_translate_layout.addLayout(on_off_mirror_layout)
         
         on_off_mirror_layout.addWidget(mirror_create)
         on_off_mirror_layout.addWidget(mirror_right_left)
-        on_off_mirror_layout.addWidget(mirror_meshes)
         on_off_mirror_layout.addWidget(mirror_curves)
         on_off_mirror_layout.addWidget(mirror_invert)
         on_off_mirror_layout.addSpacing(3)
@@ -543,6 +471,7 @@ class StructureWidget(RigWidget):
 
         mirror.clicked.connect(self._mirror)
         mirror_sel.clicked.connect(self._mirror_selected)
+        mirror_curves.clicked.connect(self._mirror_curves)
         
         joints_on_curve.clicked.connect(self._joints_on_curve)
         snap_to_curve.clicked.connect(self._snap_joints_to_curve)
@@ -552,8 +481,6 @@ class StructureWidget(RigWidget):
         
         main_layout = self.main_layout
 
-        main_layout.addSpacing(5)
-        main_layout.addWidget(set_color)
         main_layout.addSpacing(5)
         
         main_layout.addLayout(mirror_translate_layout)
@@ -568,16 +495,6 @@ class StructureWidget(RigWidget):
         main_layout.addWidget(snap_to_curve)
         main_layout.addSpacing(10)
         main_layout.addWidget(transfer_joints)
-
-    def _set_color(self):
-        
-        picker = qt_ui.ColorPicker()
-        picker.apply_to_selected.connect(self._set_color_selected)
-        picker.show()
-        
-    def _set_color_selected(self, color):
-        set_color_selected(color)
-        
 
     def _subdivide_joint(self, number):
         space.subdivide_joint(count = number)
@@ -659,27 +576,6 @@ class StructureWidget(RigWidget):
             core.print_help('Oriented selected joints')
         
         cmds.select(selected)
-
-    def _auto_orient_attributes(self):
-        
-        scope = cmds.ls(sl = True, l = True)
-        
-        forward_axis = self.combo_forward.currentText()
-        up_axis = self.combo_up.currentText()
-        
-        if forward_axis == up_axis:
-            core.print_warning('Forward Axis cannot be the same as Up Axis')
-            cmds.select(scope)
-            return 
-        
-        for thing in scope:
-            space.auto_generate_orient_attributes(thing, forward_axis, up_axis)
-            space.orient_attributes([thing], initialize_progress=True, hierarchy=True)
-    
-        cmds.select(scope)
-    
-    def _mirror_orient_attributes(self):
-        pass
 
     def _unskip_orient(self):
         
@@ -790,16 +686,6 @@ class StructureWidget(RigWidget):
         
         rigs_util.mirror_curve()
         
-    def _mirror_meshes(self):
-        
-        meshes = cmds.ls(type = 'mesh')
-        
-        mesh_dict = {}
-        for mesh in meshes:
-            parent = cmds.listRelatives(mesh, p = True)[0]
-            mesh_dict[parent] = None
-        
-        space.mirror_xform(transforms= list(mesh_dict.keys()), skip_meshes=False)
         
     @core.undo_chunk
     def _mirror_invert(self):
@@ -827,7 +713,7 @@ class StructureWidget(RigWidget):
         
         joints = []
         
-        if 'joint' in node_types:
+        if node_types.has_key('joint'):
             joints = node_types['joint']
         
         curve = None
@@ -902,14 +788,8 @@ class ControlWidget(RigWidget):
         mirror_controls.clicked.connect(self._mirror_controls)
         mirror_controls.setMinimumHeight(40)
         
-        
-        set_color = qt.QPushButton('Open Color Picker')
-        set_color.clicked.connect(self._set_color)
-        
-        
         curve_names = curve.get_library_shape_names()
-        
-        curve_names = sorted(curve_names)
+        curve_names.sort()
         self.curve_shape_combo = qt.QComboBox()
         self.curve_shape_combo.addItems(curve_names)
         self.curve_shape_combo.setMaximumWidth(110)
@@ -967,14 +847,7 @@ class ControlWidget(RigWidget):
         snap_curve.set_value_label('Offset')
         snap_curve.clicked.connect(self._snap_curve)
         
-        convert_curve_to_edge_loop = qt_ui.BasicButton('Convert Curve to Edge Loop')
-        convert_curve_to_border_edge = qt_ui.BasicButton('Convert Curve to Border Edge')
         
-        convert_curve_to_edge_loop.clicked.connect(self._curve_from_edge)
-        convert_curve_to_border_edge.clicked.connect(self._curve_from_border)
-        
-        self.main_layout.addWidget(set_color)
-        self.main_layout.addSpacing(15)
         self.main_layout.addWidget(mirror_control)
         self.main_layout.addWidget(mirror_controls)
         self.main_layout.addSpacing(10)
@@ -987,29 +860,12 @@ class ControlWidget(RigWidget):
         self.main_layout.addWidget(self.rotate_z_widget)
         self.main_layout.addSpacing(15)
         self.main_layout.addWidget(number_button)
-        
 
         self.main_layout.addWidget(size_slider)
         self.main_layout.addWidget(size_center_slider)
         
         self.main_layout.addWidget(project_curve)
         self.main_layout.addWidget(snap_curve)
-        
-        self.main_layout.addSpacing(10)
-        self.main_layout.addWidget(convert_curve_to_edge_loop)
-        self.main_layout.addWidget(convert_curve_to_border_edge)
-        
-        
-        
-    def _set_color(self):
-        
-        picker = qt_ui.ColorPicker()
-        picker.apply_to_selected.connect(self._set_color_selected)
-        picker.show()
-        
-    def _set_color_selected(self, color):
-        set_color_selected(color)
-        
         
     def _mirror_control(self):
         
@@ -1191,63 +1047,6 @@ class ControlWidget(RigWidget):
             inst.set_shape_to_curve(str(c), shape, add_curve_type_attribute=False)
         
         cmds.select(curves)
-        
-    @core.undo_chunk
-    def _curve_from_edge(self):
-        
-        scope = cmds.ls(sl = True)
-        controls = []
-        for thing in scope:
-            if rigs_util.is_control(thing):
-                controls.append(thing)
-        
-        if not controls:
-            core.print_warning('Please select a control.')
-            return 
-        
-        edges = geo.get_edges_in_list(scope)
-        
-        if not edges:
-            core.print_warning('Please select an edge in the edge loop.')
-            return
-        
-        curve = geo.create_curve_from_edge_loop(edges[0], 0)
-        
-        control_inst = rigs_util.Control(controls[0])
-        control_inst.copy_shapes(curve)
-        
-        cmds.delete(curve)
-        
-    @core.undo_chunk
-    def _curve_from_border(self):
-        
-        scope = cmds.ls(sl = True)
-        controls = []
-        for thing in scope:
-            if rigs_util.is_control(thing):
-                controls.append(thing)
-        
-        if not controls:
-            core.print_warning('Please select a control.')
-            return 
-        
-        meshes = geo.get_meshes_in_list(scope)
-        
-        if not meshes:
-            core.print_warning('Select a mesh with border edges.')
-            return
-        
-        curve = geo.create_curve_from_mesh_border(meshes[0], offset = 0)
-        
-        if not curve:
-            core.print_warning('Could not create border edge from mesh.')
-            return
-        
-        control_inst = rigs_util.Control(controls[0])
-        control_inst.copy_shapes(curve)
-        
-        cmds.delete(curve)
-        
         
 class DeformWidget(RigWidget):
     
@@ -1456,10 +1255,4 @@ class SkinWidget(RigWidget):
         percent = self.percent_sharpen_weights.get_value()
         
         deform.sharpen_skin_weights(verts, get_count, percent)
-
-def set_color_selected(color):
-    scope = cmds.ls(sl = True, type = 'transform')
     
-    rgb = color.getRgbF()
-    attr.set_color_rgb(scope, *rgb[:-1])
-    cmds.select(cl = True)    

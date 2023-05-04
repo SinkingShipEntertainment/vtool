@@ -1,9 +1,4 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-
-import vtool.util
-import vtool.util_file
+# Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import os
 import sys
@@ -14,30 +9,35 @@ def main():
     
     
     
-    print( '\n\n\n\n\n------- VETALA BATCH --------------------------------------------------------------------------------------------\n\n')
-    
-    process_path = os.environ['VETALA_CURRENT_PROCESS']
-    settings = os.environ['VETALA_SETTINGS']
-    
-    source_path = os.environ['VETALA_PATH']
-    source_path = os.path.dirname(source_path)
-    
-    sys.path.insert(0, source_path)
-    
-    print( '\n')
-    print( 'Using Pyton Version:\t', sys.version)
-    print( 'Using Vetala Path:\t', source_path)
-    print( 'Using Vetala Process:\t', process_path)
-    print( '\n')
+    print '\n\n\n\n\n------- VETALA BATCH ---------------------------------------------------------------------------------------------------------------------\n\n'
     
     try:
         import maya.standalone
         maya.standalone.initialize( name='python' )
     except:
         status = traceback.format_exc()
-        print( status)
+        print status
         
-        print( '\n\nMaya standalone failed')
+        print '\n\nMaya standalone failed'
+    
+    source_path = os.environ['VETALA_PATH']
+    source_path = os.path.dirname(source_path)
+    
+    sys.path.insert(0, source_path)
+    
+    print '\nUsing Vetala Path', source_path
+    print 'Using Pyton Version', sys.version
+    
+    env = os.environ.copy()
+    
+    #importing from vetala resets all the paths
+    import vtool.util
+    import vtool.util_file
+    
+    os.environ = env
+    
+    process_path = vtool.util.get_env('VETALA_CURRENT_PROCESS')
+    settings = vtool.util.get_env('VETALA_SETTINGS')
     
     if settings:
         settings_inst = vtool.util_file.SettingsFile()
@@ -48,9 +48,12 @@ def main():
             for code in codes:
                 vtool.util.show('Adding code path: %s' % code)
                 sys.path.append(code)
-                
+    
+    
+
+
     if vtool.util.is_in_maya():
-        print( 'Using Maya %s\n\n' % vtool.util.get_maya_version())
+        print 'Using Maya %s\n\n' % vtool.util.get_maya_version()
         if vtool.util.get_maya_version() >= 2017:
             import maya.cmds as cmds
             try:
@@ -69,6 +72,8 @@ def main():
         except:
             vtool.util.error( traceback.format_exc() )
         
+        
+        
         vtool.util.show('Batch finished.\n\n')
         
         comment = 'Batch build'
@@ -85,7 +90,7 @@ def main():
     while True:
         time.sleep(1)
     
-    print( '\n\n------- END OF VETALA BATCH ----------------------------------------------------------\n\n\n\n\n')
+    print '\n\n------- END OF VETALA BATCH ----------------------------------------------------------\n\n\n\n\n'
     
 if __name__ == '__main__':
     main()

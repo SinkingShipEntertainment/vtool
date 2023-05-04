@@ -1,8 +1,3 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-
-
 import inspect
 import traceback
 
@@ -10,29 +5,18 @@ from vtool import qt_ui, qt
 from vtool import util
 from vtool import util_file
 
-in_maya = False
+import maya.OpenMayaUI as omui
+import maya.cmds as cmds
+import maya.mel as mel
+import maya.utils
 
-if util.is_in_maya():
-    in_maya = True
+from maya.app.general.mayaMixin import MayaQWidgetBaseMixin, MayaQWidgetDockableMixin
 
-if in_maya:
-    import maya.OpenMayaUI as omui
-    import maya.cmds as cmds
-    import maya.mel as mel
-    import maya.utils
-    
-    from maya.app.general.mayaMixin import MayaQWidgetBaseMixin, MayaQWidgetDockableMixin
-
-else:
-    MayaQWidgetBaseMixin = object
-    MayaQWidgetDockableMixin = object
-    
-    
 #--- signals
 class new_scene_object(qt.QtCore.QObject):
     signal = qt_ui.create_signal()
 
-class open_scene_object(qt.QtCore.QObject):    
+class open_scene_object(qt.QtCore.QObject):
     signal = qt_ui.create_signal()
     
 class read_scene_object(qt.QtCore.QObject):
@@ -41,85 +25,49 @@ class read_scene_object(qt.QtCore.QObject):
 class new_tool_object(qt.QtCore.QObject):
     signal = qt_ui.create_signal(object)
     
-class selection_change_object(qt.QtCore.QObject):
-    signal = qt_ui.create_signal()
-    
-if in_maya:
-    new_scene_signal = new_scene_object()
-    open_scene_signal = open_scene_object()
-    read_scene_signal = read_scene_object()
-    new_tool_signal = new_tool_object() 
-    selection_change_signal = selection_change_object()
+new_scene_signal = new_scene_object()
+open_scene_signal = open_scene_object()
+read_scene_signal = read_scene_object()
+new_tool_signal = new_tool_object() 
 
-def emit_new_scene_signal():    
-    util.show('Emit new scene')
+def emit_new_scene_signal():
     new_scene_signal.signal.emit()
 
 def emit_open_scene_signal():
-    util.show("Emit open scene")    
     open_scene_signal.signal.emit()
     
 def emit_read_scene_signal():
-    util.show("Emit reading scene")    
     read_scene_signal.signal.emit()
     
 def emit_new_tool_signal(window):
     new_tool_signal.signal.emit(window)
 
-def emit_selection_change_signal():
-    selection_change_signal.signal.emit()
-
 #--- script jobs
 job_new_scene = None
 job_open_scene = None
 job_read_scene = None
-job_selection_changed = None
 
 def create_scene_script_jobs():
     
     global job_new_scene
     global job_open_scene
     global job_read_scene
-    global job_selection_changed
     
-    job_new_scene = cmds.scriptJob( event = ['NewSceneOpened', 'from vtool.maya_lib import ui_core;ui_core.emit_new_scene_signal()'], protected = False)
-    job_open_scene = cmds.scriptJob( event = ['SceneOpened', 'from vtool.maya_lib import ui_core;ui_core.emit_open_scene_signal()'], protected = False)
-    job_read_scene = cmds.scriptJob( ct = ['readingFile', 'from vtool.maya_lib import ui_core;ui_core.emit_read_scene_signal()'], protected = False)
-    job_selection_changed = cmds.scriptJob(event=['SelectionChanged', 'from vtool.maya_lib import ui_core;ui_core.emit_selection_change_signal()'], protected = False)
-    
+    job_new_scene = cmds.scriptJob( event = ['NewSceneOpened', 'from vtool.maya_lib import ui_core;ui_core.emit_new_scene_signal();print "V:\t\tEmit new scene."'], protected = False)
+    job_open_scene = cmds.scriptJob( event = ['SceneOpened', 'from vtool.maya_lib import ui_core;ui_core.emit_open_scene_signal();print "V:\t\tEmit open scene."'], protected = False)
+    job_read_scene = cmds.scriptJob( ct = ['readingFile', 'from vtool.maya_lib import ui_core;ui_core.emit_read_scene_signal();print "V:\t\tEmit reading scene."'], protected = False)
 
-if in_maya:
-    create_scene_script_jobs()
+create_scene_script_jobs()
 
 def delete_scene_script_jobs():
-    
-    global new_scene_signal
-    global open_scene_signal
-    global read_scene_signal
-    global new_tool_signal 
-    global selection_change_signal
-    
-    if 'new_scene_signal' in globals():
-        del(new_scene_signal)
-    if 'open_scene_signal' in globals():
-        del(open_scene_signal)
-    if 'read_scene_signal' in globals():
-        del(read_scene_signal)
-    if 'new_tool_signal' in globals():
-        del(new_tool_signal)
-    if 'selection_change_signal' in globals():
-        del(selection_change_signal)
     
     global job_new_scene
     global job_open_scene
     global job_read_scene
-    global job_selection_changed
-    
     
     cmds.scriptJob(kill = job_new_scene)
     cmds.scriptJob(kill = job_open_scene)
     cmds.scriptJob(kill = job_read_scene)
-    cmds.scriptJob(kill = job_selection_changed)
     
 #--- ui 
 
@@ -145,9 +93,7 @@ def get_maya_window():
 
 def was_floating(label):
     settings = util_file.get_vetala_settings_inst()
-    floating = True
-    if settings.has_setting('%s floating' % label):
-        floating =  settings.get('%s floating' % label)
+    floating =  settings.get('%s floating' % label)
     
     return floating
 
@@ -295,7 +241,7 @@ class MayaDockMixin(MayaQWidgetDockableMixin):
         # Grab the pointer to our instance as a Maya object
         mixinPtr = omui.MQtUtil.findControl(instance.objectName())
         # Add our UI to the WorkspaceControl
-        omui.MQtUtil.addWidgetToMayaLayout(int(mixinPtr), int(workspace_control))
+        omui.MQtUtil.addWidgetToMayaLayout(long(mixinPtr), long(workspace_control))
         
         if hasattr(instance, 'initialize_settings'):
             instance.initialize_settings()

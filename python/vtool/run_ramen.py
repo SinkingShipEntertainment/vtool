@@ -1,13 +1,10 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
-from __future__ import print_function
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import sys
 
-from vtool import qt_ui
+import qt_ui
 
-from vtool import util
+import util
 
 from vtool.ramen.ui_lib import ui_nodes
 
@@ -16,7 +13,7 @@ def main(directory = None):
     
     window = None
     
-    from vtool import logger
+    import logger
     logger.setup_logging(level = 'DEBUG')
     
     if not util.is_in_maya():
@@ -27,8 +24,8 @@ def main(directory = None):
         return window
         
     if util.is_in_maya():
-        from vtool.maya_lib import ui
-        ui.ramen()
+        import maya_lib.ui
+        maya_lib.ui.process_manager()
         
     
 

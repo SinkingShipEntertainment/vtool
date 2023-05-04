@@ -1,12 +1,14 @@
 # Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
 
-from ... import qt_ui, qt, util
-from .. import ui_core
-from .. import core
+from vtool import qt_ui, qt
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+
+from vtool.maya_lib import ui_core
+
+from vtool.maya_lib import core
+from vtool.maya_lib import rigs_util
+
+import maya.cmds as cmds
         
 class CharacterTree(qt.QTreeWidget):
     

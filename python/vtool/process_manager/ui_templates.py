@@ -1,10 +1,8 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-
-from . import ui_view
-from .. import qt_ui, qt
-from .. import util
+import ui_view
+from vtool import qt_ui, qt
+from vtool import util
 
 class TemplateWidget(qt_ui.BasicWidget):
     
@@ -82,8 +80,6 @@ class TemplateWidget(qt_ui.BasicWidget):
         self.settings.set('template_directory', [current_name, directory])
     
     def set_templates(self, template_list):
-        
-        template_list = util.convert_to_sequence(template_list)
         
         self.template_list = template_list
         

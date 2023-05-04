@@ -1,21 +1,16 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
+import vtool.util
+import vtool.util_file
+import api
 
-from __future__ import absolute_import
-
-import math
-
-from .. import util, util_file
-from . import api
-from . import core
-from . import attr
-from . import geo
-
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
     
-
-
+import core
+import attr
+import geo
+import math
 
 def apply_shading_engine(shader_name, mesh):
     """
@@ -60,7 +55,7 @@ def get_shading_engines(shader_name = None):
                 if cmds.nodeType(output) == 'shadingEngine':
                     found.append(output)
         if not outputs:
-            util.warning('No shading engine attached')
+            vtool.util.warning('No shading engine attached')
         return found
     
     if not shader_name:
@@ -137,9 +132,9 @@ def set_shader_info(geo, shader_dict):
     
     
     
-    shaders = list(shader_dict.keys())
+    shaders = shader_dict.keys()
     
-    if '.shader.order' in shader_dict:
+    if shader_dict.has_key('.shader.order'):
         shaders = shader_dict['.shader.order']
     
     for shader in shaders:
@@ -155,7 +150,7 @@ def set_shader_info(geo, shader_dict):
             
             split_mesh = mesh.split('.')
             
-            if not geo in found_meshes:
+            if not found_meshes.has_key(geo):
                 geo_name = cmds.ls('%s.f[*]' % geo, flatten = False)
                 found_meshes[geo] = geo_name
             
@@ -223,7 +218,7 @@ def apply_shader(shader_name, mesh):
         
     """
     
-    mesh = util.convert_to_sequence(mesh)
+    mesh = vtool.util.convert_to_sequence(mesh)
     
     mesh = cmds.ls(mesh, l = True)
     
@@ -324,6 +319,8 @@ def create_texture_file(name, filepath = ''):
     
     if filepath:
         
+        vtool.util_file.fix_slashes(filepath)
+        
         cmds.setAttr('%s.fileTextureName' % file_node, filepath, type = 'string')
     
     return file_node
@@ -370,7 +367,7 @@ def get_one_udim_number(mesh, sample_vertex = 0):
     min_u = math.floor(u)
     min_v = math.floor(v)
         
-    udim = util.uv_to_udim(min_u, min_v)
+    udim = vtool.util.uv_to_udim(min_u, min_v)
     
     return udim
 

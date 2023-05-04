@@ -1,6 +1,4 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
+# Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import os
 import subprocess
@@ -79,9 +77,9 @@ class Job(object):
             name = 'cache'
             
             if fields:
-                if 'Shot' in fields:
+                if fields.has_key('Shot'):
                     name = fields["Shot"]
-                if 'Asset' in fields:
+                if fields.has_key('Asset'):
                     name = fields["Asset"]
             
             version = fields['version']
@@ -218,10 +216,10 @@ class Job(object):
         
         try:
             
-            print( 'submit :', self.deadline_path, job_file, plugin_file, self.submit_file, self.script)
+            print 'submit :', self.deadline_path, job_file, plugin_file, self.submit_file, self.script
             subprocess.call([self.deadline_path, job_file, plugin_file, self.submit_file, self.script])
         except:
-            print( traceback.format_exc())   
+            print traceback.format_exc()   
         
 
 class MayaJob( Job ):

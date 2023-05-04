@@ -1,18 +1,16 @@
 # Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
+from vtool.maya_lib import ui_core
+from vtool import qt_ui, qt
 
-from .. import ui_core
-from ... import qt_ui, qt, util
+from vtool import util
         
-if util.is_in_maya():        
-    import maya.cmds as cmds
-    
-from .. import rigs_util
-from .. import attr
-from .. import core
+import maya.cmds as cmds
+from vtool.maya_lib import rigs_util
+from vtool.maya_lib import attr
+from vtool.maya_lib import core
 
-from .. import picker
+from vtool.maya_lib import picker
 
 class PickManager(ui_core.MayaWindow):
     
@@ -45,6 +43,8 @@ class PickManager(ui_core.MayaWindow):
         self.tab_widget.tab_renamed.connect(self._rename_tab)
         
         picker_inst = self._create_picker()
+        
+        print 'pickers', self.pickers
         
         picker_inst.item_added.connect(self._picker_item_added)
         

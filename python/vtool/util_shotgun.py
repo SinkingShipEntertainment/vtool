@@ -1,5 +1,3 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
 from vtool import util_file
 from vtool import util
 
@@ -102,7 +100,7 @@ def get_project_tank_name(name):
     
     result = sg.find('Project', [['name', 'is', name]],['tank_name'])
     
-    if 'tank_name' in result[0]:
+    if result[0].has_key('tank_name'):
         return result[0]['tank_name']
     
     return project_name
@@ -283,7 +281,7 @@ def get_latest_file(project, sg_asset_type, name, step, publish_path = False, ta
     fields = {}
     fields['sg_asset_type'] = sg_asset_type
     fields['Asset'] = name
-    if 'short_name' in step_entity:
+    if step_entity.has_key('short_name'):
         fields['Step'] = step_entity['short_name']
     if task:
         fields['Task'] = task
@@ -327,7 +325,7 @@ def get_next_file(project, sg_asset_type, name, step, publish_path = False, task
     fields = {}
     fields['sg_asset_type'] = sg_asset_type
     fields['Asset'] = name
-    if 'short_name' in step_entity:
+    if step_entity.has_key('short_name'):
         fields['Step'] = step_entity['short_name']
     if task:
         fields['Task'] = task

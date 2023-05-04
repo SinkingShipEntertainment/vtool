@@ -1,17 +1,15 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
+from vtool import qt
 
-from . import qt
-
-from . import util
-from . import util_file
+import util
+import util_file
 import string
 import re
 import random
 import sys
 
-from . import logger
+from vtool import logger
 log = logger.get_logger(__name__) 
 
 _save_button_minimum = 60
@@ -37,16 +35,12 @@ def is_pyside2():
         return True
     return False
 
-if util.is_in_maya():
+if util.is_in_maya:
     yes_color = qt.QColor(0,255,0, 50)
     no_color = qt.QColor(qt.QColor(255,0,0, 50))
 else:
-    try:
-        yes_color = qt.QColor(200,255,200, 100)
-        no_color = qt.QColor(qt.QColor(255,200,200, 100))
-    except:
-        #if qt doesn't load completely the module can still source
-        pass
+    yes_color = qt.QColor(200,255,200, 100)
+    no_color = qt.QColor(qt.QColor(255,200,200, 100))
 
 def build_qt_application(*argv):
     application = qt.QApplication(*argv)
@@ -54,6 +48,10 @@ def build_qt_application(*argv):
     
 def create_signal(*arg_list):
     return qt.create_signal(*arg_list)
+
+
+    
+
 
 class BasicWindow(qt.QMainWindow):
     
@@ -124,19 +122,15 @@ class DirectoryWindow(BasicWindow):
 class BasicGraphicsWindow(BasicWindow):
     
     title = 'BasicGraphicsView'
-    _last_instance = None
+    
     
     
     def __init__(self, parent = None):
     
         self._define_main_widget()
         self._define_main_view()
-        self.__class__._last_instance = self
         
         super(BasicGraphicsWindow, self).__init__(parent, use_scroll=False)
-        
-        self.setWindowTitle(self.title)
-        self.setObjectName(self.title)
         
         self.setMinimumSize(400,200)
         
@@ -291,9 +285,6 @@ class BasicDockWidget(qt.QDockWidget):
 
 class BasicButton(qt.QPushButton):
     
-    def sizeHint(self):
-        return qt.QtCore.QSize(150, 25)
-    
     def mousePressEvent(self, event):
         
         modifiers = qt.QApplication.keyboardModifiers()
@@ -305,6 +296,8 @@ class BasicButton(qt.QPushButton):
     
 class BasicList(qt.QListWidget):
     def mousePressEvent(self, event):
+        
+        
         
         modifiers = qt.QApplication.keyboardModifiers()
         if modifiers == qt.QtCore.Qt.AltModifier:
@@ -391,6 +384,7 @@ class TreeWidget(qt.QTreeWidget):
             if util.is_in_maya():
                 color = qt.QtCore.Qt.white
             
+
             brush = qt.QBrush(qt.QColor(color))
 
             if rect.height() == 0:
@@ -401,7 +395,8 @@ class TreeWidget(qt.QTreeWidget):
                 pen = qt.QPen(brush, 2, qt.QtCore.Qt.DotLine)
                 painter.setPen(pen)
                 painter.drawRect(rect)
-                
+    
+    
     def mousePressEvent(self, event):
         
         modifiers = qt.QApplication.keyboardModifiers()
@@ -422,12 +417,11 @@ class TreeWidget(qt.QTreeWidget):
     
     def dragMoveEvent(self, event):
         
+        
+        
         pos = event.pos()
         item = self.itemAt(pos)
-        
-        if not item:
-            item = self.invisibleRootItem()
-        
+
         if item:
             index = self.indexFromItem(item)  # this always get the default 0 column index
 
@@ -472,7 +466,7 @@ class TreeWidget(qt.QTreeWidget):
 
         if index != root:
 
-            self.dropIndicatorPosition = self.position(event.pos(), self.visualRect(index), index)
+            dropIndicatorPosition = self.position(event.pos(), self.visualRect(index), index)
             
             if self.dropIndicatorPosition == self.AboveItem:
                 #'dropon above'
@@ -496,7 +490,7 @@ class TreeWidget(qt.QTreeWidget):
 
         else:
             self.dropIndicatorPosition = self.OnViewport
-            
+
         l[0], l[1], l[2], l[3] = event, row, col, index
 
         # if not self.droppingOnItself(event, index):
@@ -651,9 +645,6 @@ class TreeWidget(qt.QTreeWidget):
         
         if not hasattr(self.edit_state, 'text'):
             return
-        
-        if not item and self.edit_state:
-            item = self.edit_state
         
         self.edit_state = None
                
@@ -859,7 +850,7 @@ class TreeWidget(qt.QTreeWidget):
         
         names.reverse()
         
-        path = '/'.join(names)
+        path = string.join(names, '/')
         
         return path
     
@@ -976,12 +967,7 @@ class FileTreeWidget(TreeWidget):
         if not directory:
             directory = self.directory
             
-        found = util_file.get_files_and_folders(directory)
-        
-        if ('__pycache__') in found:
-            found.remove('__pycache__')
-            
-        return found
+        return util_file.get_files_and_folders(directory)
     
     def _load_files(self, files):
         self.clear()
@@ -1590,6 +1576,8 @@ class FileManagerWidget(DirectoryWidget):
         
         self.history_attached = False
         
+        
+        
     def _define_io_tip(self):
         return ''
         
@@ -1818,18 +1806,16 @@ class FileManagerWidget(DirectoryWidget):
         self.history_attached = True
         
         self._activate_history_tab()
-    
-    def set_temp_sub_folder(self, folder_name):
-        self.data_class.set_temp_sub_folder( folder_name )
-    
+            
     def set_directory(self, directory):
         super(FileManagerWidget, self).set_directory(directory)
+        
+        
         
         log.info('Setting FileManager Widget directory: %s' % directory)
         
         if self.data_class:
             self.data_class.set_directory(directory)
-            
             history_directory = self._get_history_directory(directory)
             
         if self.tab_widget.currentIndex() == 0:
@@ -1877,18 +1863,10 @@ class SaveFileWidget(DirectoryWidget):
     def _define_tip(self):
         
         return ''
-            
+        
     def _define_main_layout(self):
         return qt.QHBoxLayout()
-    
-    def _create_button(self, name):
         
-        button = BasicButton(name)
-        
-        button.setMaximumWidth(150)
-        
-        return button
-    
     def _build_widgets(self):
         
         
@@ -2203,7 +2181,7 @@ class DictionaryWidget(BasicWidget):
         
         key = widget.get_entry()
         
-        if key in self.dictionary:
+        if self.dictionary.has_key(key):
             self.dictionary.pop(key)
         
         widget.hide()
@@ -2376,22 +2354,11 @@ class GetString(BasicWidget):
         
         self.main_layout.setAlignment(qt.QtCore.Qt.AlignTop)
         
-        select_button = qt.QPushButton('S')
-        select_button.setMaximumWidth(22)
-        select_button.setMaximumHeight(16)
-        select_button.clicked.connect(self._select_command)
-        select_button.hide()
-        self.select_button = select_button
-        
         
         insert_button = qt.QPushButton('<')
-        insert_button.setMaximumWidth(14)
-        insert_button.setMaximumHeight(16)
+        insert_button.setMaximumWidth(20)
         insert_button.clicked.connect(self._button_command)
-        
         self.main_layout.addWidget(insert_button)
-        self.main_layout.addSpacing(5)
-        self.main_layout.addWidget(select_button)
         insert_button.hide()
         
         self.button = insert_button
@@ -2412,51 +2379,15 @@ class GetString(BasicWidget):
             
             selection = cmds.ls(sl = True)
             
-            text = ''
-            
-            inc = 0
-            for thing in selection:
-                if inc > 0:
-                    text += (', ' + thing)
-                else:
-                    text += thing
-                inc += 1
-            
-            """
             if len(selection) > 1:
                 selection = self._remove_unicode(selection)
                 selection = str(selection)
             
             if len(selection) == 1:
                 selection = str(selection[0])
-            """
-            self.set_text(text)
+                
+            self.set_text(selection)
             
-    def _select_command(self):
-        if self._suppress_button_command:
-            return
-        
-        if util.is_in_maya():
-            entries = self.get_text_as_list()
-            
-            if not entries:
-                return
-            
-            import maya.cmds as cmds
-            
-            found = []
-            not_found = []
-            
-            for entry in entries:
-                if cmds.objExists(entry):
-                    found.append(entry)
-                else:
-                    not_found.append(entry)
-            cmds.select(found)
-            
-            if not_found:
-                util.warning('Could not select: %s' % not_found)
-        
     def _remove_unicode(self, list_or_tuple):
             new_list = []
             for sub in list_or_tuple:
@@ -2510,11 +2441,6 @@ class GetString(BasicWidget):
     def set_suppress_button_command(self, bool_value):
         self._suppress_button_command = bool_value
         
-    def set_select_button(self, bool_value):
-        if bool_value:
-            self.select_button.show()
-        else:
-            self.select_button.hide()
     
     def get_text_as_list(self):
         
@@ -2526,18 +2452,6 @@ class GetString(BasicWidget):
             try:
                 text = eval(text)
                 return text
-            except:
-                pass
-        
-        if text.find(',') > -1:
-            try:
-                
-                
-                text = text.split(',')
-                found = []
-                for thing in text:
-                    found.append(thing.strip())
-                return found
             except:
                 pass
         
@@ -2709,7 +2623,7 @@ class GetFileWidget(DirectoryWidget):
         self.file_label.setMinimumWidth(60)
         self.file_label.setMaximumWidth(100)
         
-        self.file_edit = FileEdit()
+        self.file_edit = qt.QLineEdit()
         self.file_edit.textEdited.connect(self._text_edited)
         self.file_edit.textChanged.connect(self._text_changed)
         
@@ -2737,9 +2651,8 @@ class GetFileWidget(DirectoryWidget):
         
         filename = util_file.fix_slashes(filename)
         
-        #if self.extension:
-        #    if not filename.endswith(self.extension):
-        #    filename = filename + self.extension
+        if not filename.endswith('json'):
+            filename = filename + '.json'
         
         if filename:
             self.file_edit.setText(filename)
@@ -2775,7 +2688,7 @@ class GetFileWidget(DirectoryWidget):
         self.file_label.setText(label)
         
     def set_file(self, file_path):
-        #super(GetFileWidget, self).set_file(file_path)
+        super(GetFileWidget, self).set_file(file_path)
         
         self.file_edit.setText(file_path)
         
@@ -2806,32 +2719,6 @@ class GetFileWidget(DirectoryWidget):
         
     def get_file(self):
         return self.file_edit.text()
-
-class FileEdit(qt.QLineEdit):
-    def __init__( self, parent = None ):
-        super(FileEdit, self).__init__(parent)
-
-        self.setDragEnabled(True)
-
-    def dragEnterEvent( self, event ):
-        data = event.mimeData()
-        urls = data.urls()
-        if ( urls and urls[0].scheme() == 'file' ):
-            event.acceptProposedAction()
-
-    def dragMoveEvent( self, event ):
-        data = event.mimeData()
-        urls = data.urls()
-        if ( urls and urls[0].scheme() == 'file' ):
-            event.acceptProposedAction()
-
-    def dropEvent( self, event ):
-        data = event.mimeData()
-        urls = data.urls()
-        if ( urls and urls[0].scheme() == 'file' ):
-            # for some reason, this doubles up the intro slash
-            filepath = str(urls[0].path())[1:]
-            self.setText(filepath)
 
 class DoubleSpin(qt.QDoubleSpinBox):
     def wheelEvent(self, event):
@@ -3010,7 +2897,7 @@ class GetDictionary(BasicWidget):
         keys = self.order
         
         if not keys:
-            keys = list(dictionary.keys())
+            keys = dictionary.keys()
             keys.sort()
         
         for key in keys:
@@ -3186,20 +3073,6 @@ class Group(qt.QGroupBox):
         
     def set_collapsable(self, bool_value):
         self._collapsable = bool_value
-        
-        title = self.title()
-        
-        if not bool_value:
-            self.expand_group()
-            if title.startswith('-  '):
-                title = title[3:]
-                self.setTitle(title)
-        else:
-            self.collapse_group()
-            if not title.startswith('+  '):
-                title = '+  ' + title
-                self.setTitle(title)
-            
         
 class Slider(BasicWidget):
     
@@ -3480,7 +3353,7 @@ class CodeEditTabs(BasicWidget):
         widget.deleteLater()
         self.tabs.removeTab(index)
                 
-        if str(title) in self.code_tab_map:
+        if self.code_tab_map.has_key(str(title)):
             self.code_tab_map.pop(str(title))
 
         if self.tabs.count() == 0:
@@ -3498,13 +3371,13 @@ class CodeEditTabs(BasicWidget):
         
         self.save.emit(current_widget)
         
-        if title in self.code_floater_map:
+        if self.code_floater_map.has_key(title):
             floater_widget = self.code_floater_map[title]
             
             if floater_widget.filepath == filepath:
                 floater_widget.set_no_changes()
             
-        if title in self.code_tab_map:
+        if self.code_tab_map.has_key(title):
             tab_widget = self.code_tab_map[title]
             
             if tab_widget.filepath == filepath:
@@ -3559,7 +3432,7 @@ class CodeEditTabs(BasicWidget):
         
     def goto_tab(self, name):
         widget = None
-        if name in self.code_tab_map:
+        if self.code_tab_map.has_key(name):
             
             widget = self.code_tab_map[name]
                 
@@ -3571,7 +3444,7 @@ class CodeEditTabs(BasicWidget):
     def goto_floating_tab(self, name):
         
         widget = None
-        if name in self.code_floater_map:
+        if self.code_floater_map.has_key(name):
             
             widget = self.code_floater_map[name]
             widget.show()
@@ -3586,7 +3459,7 @@ class CodeEditTabs(BasicWidget):
         basename = name
         
         """
-        if basename in self.code_tab_map:
+        if self.code_tab_map.has_key(basename):
             code_widget = self.code_tab_map[basename]
             index = self.tabs.indexOf(code_widget)
         
@@ -3596,7 +3469,7 @@ class CodeEditTabs(BasicWidget):
                 self.suppress_tab_close_save = False
         """
         
-        if basename in self.code_floater_map:
+        if self.code_floater_map.has_key(basename):
             widget = self.code_floater_map[basename]
             widget.show()
             widget.setFocus()
@@ -3641,7 +3514,7 @@ class CodeEditTabs(BasicWidget):
         
         
         
-        if basename in self.code_tab_map:
+        if self.code_tab_map.has_key(basename):
             tab_widget = self.code_tab_map[basename]
             
             if tab_widget:
@@ -3658,7 +3531,7 @@ class CodeEditTabs(BasicWidget):
         
         basename = name
         
-        if basename in self.code_tab_map:
+        if self.code_tab_map.has_key(basename):
             self.goto_tab(basename)
             
             return self.code_tab_map[basename]
@@ -3683,7 +3556,7 @@ class CodeEditTabs(BasicWidget):
         
         self.goto_tab(basename)
         
-        if basename in self.code_floater_map:
+        if self.code_floater_map.has_key(basename):
             float_widget = self.code_floater_map[basename]
             
             if float_widget:
@@ -3773,7 +3646,7 @@ class CodeEditTabs(BasicWidget):
                 self.set_tab_title(index, new_name)
                 
                 self.code_tab_map[new_name] = widget
-                if old_name in self.code_tab_map:
+                if self.code_tab_map.has_key(old_name):
                     self.code_tab_map.pop(old_name)
                     removed_old_tab = True
                 widget.text_edit.filepath = new_path
@@ -3789,7 +3662,7 @@ class CodeEditTabs(BasicWidget):
                 window_parent.setWindowTitle(new_name)
                 
                 self.code_floater_map[new_name] = widget
-                if old_name in self.code_floater_map:
+                if self.code_floater_map.has_key(old_name):
                     self.code_floater_map.pop(old_name)
                     removed_old_tab = True
                 widget.text_edit.filepath = new_path
@@ -3821,7 +3694,7 @@ class CodeEditTabs(BasicWidget):
             if index > -1:
                 
                 self.tabs.removeTab(index)
-                if name in self.code_tab_map:
+                if self.code_tab_map.has_key(name):
                     self.code_tab_map.pop(name)
             
             if index == -1 or index == None:
@@ -3831,7 +3704,7 @@ class CodeEditTabs(BasicWidget):
                 window_parent.close()
                 window_parent.deleteLater()
                 
-                if name in self.code_floater_map:
+                if self.code_floater_map.has_key(name):
                     self.code_floater_map.pop(name)                            
     
     def set_process(self, process_inst):
@@ -3869,7 +3742,7 @@ class CodeEditTabs(BasicWidget):
         if not filepath:
             return
         
-        if filepath in self.code_window_map:
+        if self.code_window_map.has_key(filepath):
             
             
             window = self.code_window_map[filepath]
@@ -4819,7 +4692,7 @@ class CodeTextEdit(qt.QPlainTextEdit):
                     end_position += 4
                     inc+=1
             
-                edited_text = '\n'.join(edited)
+                edited_text = string.join(edited, '\n')
                 cursor.insertText(edited_text)
                 self.setTextCursor(cursor)
                 
@@ -4889,7 +4762,7 @@ class CodeTextEdit(qt.QPlainTextEdit):
                     
                     inc += 1
             
-                edited_text = '\n'.join(edited)
+                edited_text = string.join(edited, '\n')
             
                 cursor.insertText(edited_text)
                 self.setTextCursor(cursor)
@@ -4906,11 +4779,7 @@ class CodeTextEdit(qt.QPlainTextEdit):
         if in_file.open(qt.QtCore.QFile.ReadOnly | qt.QtCore.QFile.Text):
             text = in_file.readAll()
             
-            try:
-                text = text.data().decode("cp850")
-            except:
-                util.warning('Unable to decode text')
-                return
+            text = str(text)
             
             self.setPlainText(text)
             
@@ -5311,7 +5180,7 @@ class PythonHighlighter (qt.QSyntaxHighlighter):
         'for', 'from', 'global', 'if', 'import', 'in',
         'is', 'lambda', 'not', 'or', 'pass', 'print',
         'raise', 'return', 'try', 'while', 'yield',
-        'None', 'True', 'False', 'process', 'show','put','warning'
+        'None', 'True', 'False', 'process', 'show'
     ]
 
     if util.is_in_maya():
@@ -5478,8 +5347,6 @@ class PythonCompleter(qt.QCompleter):
         self.current_sub_variables = None
         
         self.last_column = 0
-        self._cache_custom_defined = None
-        self._last_module_name = None
         
     def keyPressEvent(self):
         return
@@ -5552,53 +5419,6 @@ class PythonCompleter(qt.QCompleter):
         
         widget.setTextCursor(cursor)
     
-    def _get_module_and_part(self, assignment, assign_map):
-        
-        sub_part = None
-        
-        target = None
-        
-        #searching for assignments
-        if assign_map:
-            
-            if assignment in assign_map:
-                target = assign_map[assignment]
-                
-            else:
-                split_assignment = assignment.split('.')
-                
-                inc = 1
-                
-                while not assignment in assign_map:
-                    
-                    sub_assignment = '.'.join(split_assignment[:(inc*-1)])
-                    
-                    if sub_assignment in assign_map:
-                        target = assign_map[sub_assignment]
-                        break
-                    
-                    inc += 1
-                    if inc > (len(split_assignment) - 1):
-                        break
-            
-                sub_part = '.'.join(split_assignment[inc:])
-        
-        if target and len(target) == 2:
-            if target[0] == 'import':
-                assignment = target[1]
-            if not target[0] == 'import':
-                
-                assignment = target[0]
-                sub_part = target[1]
-    
-        return assignment, sub_part
-    
-    def _clear_cache(self):
-        
-        self._cache_custom_defined = []
-        self.last_path = None
-        self.current_defined_imports = []        
-    
     def setWidget(self, widget):
     
         super(PythonCompleter, self).setWidget(widget)
@@ -5619,9 +5439,6 @@ class PythonCompleter(qt.QCompleter):
         """
         
         defined = util_file.get_defined(path)
-        if not defined:
-            return
-        
         defined.sort()
         
         return defined
@@ -5703,33 +5520,38 @@ class PythonCompleter(qt.QCompleter):
     
     def handle_import_load(self, text, cursor):
         
-        if not text or not text.find('.') > -1 or text[-1] == '.':
-            self._clear_cache()
-            
         column = cursor.columnNumber() - 1
+        
         text = text[:cursor.columnNumber()]
-        matching = None
+        
+        m = None
         
         found = []
         for item in re.finditer('(?<=\s|\W)*([a-zA-Z0-9._]+)\.([a-zA-Z0-9_]*)$', text):
             found.append(item)
         if found:
-            matching = found[-1]
+            m = found[-1]
+        
+        #m = re.search('\s*([a-zA-Z0-9._]+)\.([a-zA-Z0-9_]*)$', text)
+        #m = re.search('(?<=\s|\W)*([a-zA-Z0-9._]+)\.([a-zA-Z0-9_]*)$', text)
         
         block_number = cursor.blockNumber()
         line_number = block_number + 1
+        
         all_text = self.widget().toPlainText()
+        
         scope_text = all_text[:(cursor.position() - 1)]
         
-        if matching and matching.group(2):
-            scope_text = all_text[:(cursor.position() - len(matching.group(2)) + 1)]
+        if m and m.group(2):
+            
+            scope_text = all_text[:(cursor.position() - len(m.group(2)) + 1)]
         
-        if not matching:
+        if not m:
             return False
             
-        assignment = matching.group(1)
+        assignment = m.group(1)
         
-        if column < matching.end(1):
+        if column < m.end(1):
             return False
         
         sub_m = re.search('(from|import)\s+(%s)' % assignment, text)
@@ -5737,20 +5559,54 @@ class PythonCompleter(qt.QCompleter):
         if sub_m:
             return False
         
-        widget_text = self.widget().toPlainText()
-        lines = util_file.get_text_lines(widget_text)
+        text = self.widget().toPlainText()
+        lines = util_file.get_text_lines(text)
         
         path = None
         
         #remove last line because it will probably error in ast eval
         scope_lines = util_file.get_text_lines(scope_text)
-        scope_text = '\n'.join(scope_lines[:-1])
+        scope_text = string.join(scope_lines[:-1], '\n')
         
         assign_map = util_file.get_ast_assignment(scope_text, line_number-1, assignment)
+        sub_part = None
         
-        module_name, sub_part = self._get_module_and_part(assignment, assign_map)
-        if module_name != self._last_module_name:
-            self._clear_cache()
+        target = None
+        
+        #searching for assignments
+        if assign_map:
+            
+            if assignment in assign_map:
+                target = assign_map[assignment]
+                
+            else:
+                split_assignment = assignment.split('.')
+                
+                inc = 1
+                
+                while not assignment in assign_map:
+                    
+                    sub_assignment = string.join(split_assignment[:(inc*-1)],'.')
+                    
+                    if sub_assignment in assign_map:
+                        target = assign_map[sub_assignment]
+                        break
+                    
+                    inc += 1
+                    if inc > (len(split_assignment) - 1):
+                        break
+            
+                sub_part = string.join(split_assignment[inc:], '.')
+                
+        module_name = m.group(1)
+        
+        if target and len(target) == 2:
+            if target[0] == 'import':
+                module_name = target[1]
+            if not target[0] == 'import':
+                
+                module_name = target[0]
+                sub_part = target[1]
         
         #import from module   
         if module_name:
@@ -5778,8 +5634,6 @@ class PythonCompleter(qt.QCompleter):
                 if last_part in imports:
                     path = imports[last_part]
             
-            self.last_path = path
-            
             if path and not sub_part:
                 test_text = ''
                 defined = None
@@ -5787,10 +5641,10 @@ class PythonCompleter(qt.QCompleter):
                 if path == self.last_path:
                     defined = self.current_defined_imports
                 
-                test_text = matching.group()
+                test_text = m.group()
                 
-                if len(matching.groups()) > 0:
-                    test_text = matching.group(2)
+                if len(m.groups()) > 0:
+                    test_text = m.group(2)
                 
                 if not defined:
                     
@@ -5801,9 +5655,8 @@ class PythonCompleter(qt.QCompleter):
                         
                     if not defined:
                         defined = self.get_sub_imports(path)
-                        self.current_defined_imports = defined
                 
-                custom_defined = self.custom_import_load(assign_map, module_name, widget_text)
+                custom_defined = self.custom_import_load(assign_map, module_name)
                 
                 if custom_defined:
                     defined = custom_defined
@@ -5819,15 +5672,10 @@ class PythonCompleter(qt.QCompleter):
                     self.setCaseSensitivity(qt.QtCore.Qt.CaseInsensitive)
                      
                     self.popup().setCurrentIndex(self.completionModel().index(0,0))
-                    self._last_module_name = module_name
                     return True
             
             #import from a class of a module
             if path and sub_part:
-                
-                if assignment.find('.') > -1:
-                    self._last_module_name = module_name
-                    return False
                 
                 sub_functions = None
                 sub_variables = None
@@ -5838,24 +5686,21 @@ class PythonCompleter(qt.QCompleter):
                         sub_variables = self.current_sub_variables
                     
                 if not sub_functions:
-                    result = util_file.get_ast_class_sub_functions(path, sub_part)
-                    if result:
-                        sub_functions, sub_variables = result
-                        if sub_functions:
-                            self.current_sub_functions = sub_functions
-                        if sub_variables:
-                            self.current_sub_variables = sub_variables
+                    sub_functions, sub_variables = util_file.get_ast_class_sub_functions(path, sub_part)
+                    if sub_functions:
+                        self.current_sub_functions = sub_functions
+                    if sub_variables:
+                        self.current_sub_variables = sub_variables
                 
                 self.last_path_and_part = [path, sub_part]
                 
                 if not sub_functions and not sub_variables:
-                    self._last_module_name = module_name
                     return False
                 
                 test_text = ''
                 
-                if len(matching.groups()) > 0:
-                    test_text = matching.group(2)
+                if len(m.groups()) > 0:
+                    test_text = m.group(2)
                       
                 if test_text and test_text[0].islower():
                     if sub_functions:
@@ -5874,36 +5719,22 @@ class PythonCompleter(qt.QCompleter):
                 self.setCaseSensitivity(qt.QtCore.Qt.CaseInsensitive)
                 
                 self.popup().setCurrentIndex(self.completionModel().index(0,0))
-                self._last_module_name = module_name
                 return True
                 
-        module_name = matching.group(1)
-        if module_name != self._last_module_name:
-            self._clear_cache()
-        self._last_module_name = module_name
+        module_name = m.group(1)
         
         if module_name:
-            
-            if module_name.find('.') > -1:
-                return False
-            
-            if not self._cache_custom_defined:
-                custom_defined = self.custom_import_load(assign_map, module_name, widget_text)
-                self._cache_custom_defined = custom_defined
-            else:
-                custom_defined = self._cache_custom_defined
+            custom_defined = self.custom_import_load(assign_map, module_name)
             
             test_text = ''
             
-            if len(matching.groups()) > 0:
-                test_text = matching.group(2)
+            if len(m.groups()) > 0:
+                test_text = m.group(2)
             
-            if custom_defined:
-                if test_text and test_text[0].islower():
-                    custom_defined.sort(key=str.swapcase)
+            if test_text and test_text[0].islower():
+                custom_defined.sort(key=str.swapcase)
             
-                self.string_model.setStringList(custom_defined)
-                
+            self.string_model.setStringList(custom_defined)
             self.setCompletionPrefix(test_text)
             
             self.setCaseSensitivity(qt.QtCore.Qt.CaseInsensitive)
@@ -5913,7 +5744,7 @@ class PythonCompleter(qt.QCompleter):
             
         return False
     
-    def custom_import_load(self, assign_map, module_name, text):
+    def custom_import_load(self, assign_map, module_name):
         return
     
     def handle_from_import(self, text, column):
@@ -6159,7 +5990,7 @@ class AddRemoveList(BasicWidget):
     
 class AddRemoveDirectoryList(AddRemoveList):
     
-    item_update = create_signal(object, object)
+    item_update = create_signal(object)
     
     def __init__(self, parent = None, scroll = False):
         super(AddRemoveDirectoryList, self).__init__(parent, scroll)
@@ -6187,17 +6018,16 @@ class AddRemoveDirectoryList(AddRemoveList):
             current_folder = str(item.text())
             
             
-            if current_folder.startswith('-') and current_folder.endswith('-'):
+            if current_folder == '-default-':
                 folder = ''
             else:
                 folder = current_folder
                 
-            #settings = util_file.SettingsFile()
-            #settings.set_directory(self.directory, 'data.json')
-            #settings.set('sub_folder', folder)
-        
-        log.info('updating temp sub folder, %s, %s' % (self.directory, folder))
-        self.item_update.emit(self.directory, folder)
+            settings = util_file.SettingsFile()
+            settings.set_directory(self.directory, 'data.json')
+            settings.set('sub_folder', folder)
+            
+        self.item_update.emit(self.directory)
 
     def _create_item(self, name = 'folder'):
         
@@ -6316,6 +6146,7 @@ class AddRemoveDirectoryList(AddRemoveList):
         self.emit_update = True
         self.select_current_sub_folder()
         
+    
     def set_directory(self, dirpath):
         
         self.directory = dirpath
@@ -7099,183 +6930,6 @@ class SelectTreeItemDelegate(qt.QStyledItemDelegate):
         
         painter.restore()
 
-class RangeDialog(qt.QDialog):
-    
-    def __init__(self, parent = None, start_value = 1, end_value = 100):
-        super(RangeDialog, self).__init__(parent)
-        
-        self.start_value = start_value
-        self.end_value = end_value
-        
-        self.number_start = GetInteger('start')
-        self.number_end = GetInteger('end')
-        self.number_start.set_value(self.start_value)
-        self.number_end.set_value(self.end_value)
-        
-        self.accept_button = qt.QPushButton('Accept')
-        self.cancel_button = qt.QPushButton('Cancel')
-        
-        layout = qt.QVBoxLayout()
-        range_layout = qt.QHBoxLayout()
-        range_layout.addWidget(self.number_start)
-        range_layout.addWidget(self.number_end)
-        
-        button_layout = qt.QHBoxLayout()
-        button_layout.addWidget(self.accept_button)
-        button_layout.addWidget(self.cancel_button)
-        
-        layout.addLayout(range_layout)
-        layout.addLayout(button_layout)
-        
-        self.setLayout(layout)
-        
-        self.number_start.valueChanged.connect(self._set_start)
-        self.accept_button.clicked.connect(self._accept)
-        
-        self.cancel_button.clicked.connect(self._cancel)
-        
-    def reject(self):
-        super(RangeDialog, self).reject()
-        
-        self.start_value = None
-        self.end_value = None
-        
-    def _set_start(self):
-        
-        self.start_value = self.number_start.get_value()
-        
-    def _set_end(self):
-        
-        self.end_value = self.number_end.get_value()
-        
-    def _accept(self):
-        self.accept()
-        self.start_value = self.number_start.get_value()
-        self.end_value = self.number_end.get_value()
-        
-        #self.close()
-        
-        return [self.start_value, self.end_value]
-    
-    def _cancel(self):
-        self.reject()
-        
-        self.start_value = None
-        self.end_value = None
-        return [None,None]
-
-class ColorPicker(BasicWidget):
-    
-    apply_to_selected = create_signal(object)
-    
-    def _build_widgets(self):
-        super(ColorPicker, self)._build_widgets()
-        
-        self.setWindowTitle('Color Picker')
-        self.setWindowFlags(qt.QtCore.Qt.WindowStaysOnTopHint)
-        
-        self.color_widget = get_color(self, return_widget = True)
-        
-        self.main_layout.addWidget(self.color_widget)
-        
-        apply_to_selected = qt.QPushButton('Apply to Selection')
-        #apply_to_selected.setMaximumWidth(200)
-        self.setContentsMargins(5,5,5,5)
-        self.main_layout.addWidget(apply_to_selected)
-        self.main_layout.addSpacing(5)
-        
-        apply_to_selected.clicked.connect(self._apply_to_selected)
-        
-        self._define_custom_colors()
-        
-    def _define_custom_colors(self):
-        
-        dialog = self.color_widget.color_dialog
-        
-        colors = [
-        [.25,.25,.25],
-        [0.6000000238418579, 0.6000000238418579, 0.6000000238418579],
-        [0.6079999804496765, 0.0, 0.15700000524520874],
-        [0.0, 0.01600000075995922, 0.37599998712539673],
-        [0.0, 0.0, 1.0],
-        [0.0, 0.2750000059604645, 0.09799999743700027],
-        [0.14900000393390656, 0.0, 0.2630000114440918],
-        [0.7839999794960022, 0.0, 0.7839999794960022],
-        [0.5410000085830688, 0.28200000524520874, 0.20000000298023224],
-        [0.24699999392032623, 0.13699999451637268, 0.12200000137090683],
-        [0.6000000238418579, 0.14900000393390656, 0.0],
-        [1.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-        [0.0, 0.2549999952316284, 0.6000000238418579],
-        [1.0, 1.0, 1.0],
-        [1.0, 1.0, 0.0],
-        [0.3919999897480011, 0.8629999756813049, 1.0],
-        [0.2630000114440918, 1.0, 0.6389999985694885],
-        [1.0, 0.6899999976158142, 0.6899999976158142],
-        [0.8939999938011169, 0.675000011920929, 0.4749999940395355],
-        [1.0, 1.0, 0.3880000114440918],
-        [0.0, 0.6000000238418579, 0.32899999618530273],
-        [0.6299999952316284, 0.41391000151634216, 0.1889999955892563],
-        [0.62117999792099, 0.6299999952316284, 0.1889999955892563],
-        [0.40950000286102295, 0.6299999952316284, 0.1889999955892563],
-        [0.1889999955892563, 0.6299999952316284, 0.3653999865055084],
-        [0.1889999955892563, 0.6299999952316284, 0.6299999952316284],
-        [0.1889999955892563, 0.4050999879837036, 0.6299999952316284],
-        [0.43595999479293823, 0.1889999955892563, 0.6299999952316284],
-        [0.6299999952316284, 0.1889999955892563, 0.41391000151634216],
-        [.1666,0,0],
-        [.3333,0,0],
-        [.5,0,0],
-        [.6666,0,0],
-        [.8333,0,0],
-        [1,0,0],
-        [0,.1666,0],
-        [0,.3333,0],
-        [0,.5,0],
-        [0,.6666,0],
-        [0,.8333,0],
-        [0,1,0],
-        [0,0,.1666],
-        [0,0,.3333],
-        [0,0,.5],
-        [0,0,.6666],
-        [0,0,.8333],
-        [0,0,1],
-        ]
-        
-        
-        color = qt.QColor()
-        
-        inc = 0
-        for color_value in colors:
-            
-            color.setRgbF(*color_value)
-            dialog.setStandardColor(inc, color)
-            inc += 1
-        
-        
-    def _apply_to_selected(self):
-        color = self.color_widget.color_dialog.currentColor()
-        self.apply_to_selected.emit(color)
-        
-
-def get_color(parent = None, color_select_command = None, return_widget = False):
-    color_dialog = qt.QColorDialog(parent)
-    color_dialog.setOption(color_dialog.NoButtons)
-    
-    if color_select_command:
-        color_dialog.currentColorChanged.connect(color_select_command)
-    
-    if return_widget:
-        widget = BasicWidget()
-        widget.main_layout.addWidget(color_dialog)
-        widget.color_dialog = color_dialog
-    
-        widget.setWindowTitle('Pick Color')
-        return widget
-    else:
-        color_dialog.exec_()
-
 def get_integer(parent = None,text_message = 'Number', title = 'Get Number', default_value = 10):
     
     dialogue = qt.QInputDialog()
@@ -7306,11 +6960,15 @@ def get_file(directory, parent = None, file_extension_string = ''):
     fileDialog.setFileMode(fileDialog.AnyFile)
     fileDialog.setNameFilter(file_extension_string)
     
-    result = fileDialog.getOpenFileName()
+    directory = fileDialog.exec_()
     
-    if result:
-        result = util.convert_to_sequence(result)
-        return result[0]
+    directory = fileDialog.selectedFiles()
+    
+    directory = util.convert_to_sequence(directory)
+    directory = directory[0]
+    
+    if directory:
+        return directory
     
     
 def get_folder(directory, parent = None, show_files = False):
@@ -7408,22 +7066,25 @@ def get_new_name(message, parent = None, old_name = None):
         return str(comment)
     
 def critical(message, parent = None):
-    
+    #this is to make the dialog always on top.
+    parent = None
     message_box = qt.QMessageBox(parent)
     flags = message_box.windowFlags() ^ qt.QtCore.Qt.WindowContextHelpButtonHint | qt.QtCore.Qt.WindowStaysOnTopHint
     message_box.setWindowFlags(flags)
     message_box.critical(parent, 'Critical Error', message)
     
 def warning(message, parent = None):
-    
+    #this is to make the dialog always on top.
     message_box = qt.QMessageBox(parent)
+    parent = None
     flags = message_box.windowFlags() ^ qt.QtCore.Qt.WindowContextHelpButtonHint | qt.QtCore.Qt.WindowStaysOnTopHint
     message_box.setWindowFlags(flags)
     message_box.warning(parent, 'Warning', message)
 
 def message(message, parent = None):
-    
+    #this is to make the dialog always on top.
     message_box = qt.QMessageBox(parent)
+    parent = None
     flags = message_box.windowFlags() ^ qt.QtCore.Qt.WindowContextHelpButtonHint | qt.QtCore.Qt.WindowStaysOnTopHint
     message_box.setWindowFlags(flags)
     message_box.setText(message)
@@ -7454,13 +7115,3 @@ def get_icon(icon_name_including_extension):
     icon = qt.QIcon(icon_path)
     
     return icon
-
-def get_range(start_value = 1, end_value = 100):
-    
-    dialog = RangeDialog(start_value = start_value, end_value = end_value)
-    
-    dialog.exec_()
-    
-    return [dialog.start_value, dialog.end_value]
-    
-    

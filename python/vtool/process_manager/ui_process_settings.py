@@ -1,8 +1,9 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-
-from .. import qt_ui, qt
+from vtool import qt_ui, qt
+from vtool import util
+from vtool.process_manager import process
+from vtool import util_file
 
 from vtool import logger
 log = logger.get_logger(__name__)

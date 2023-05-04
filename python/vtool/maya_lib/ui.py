@@ -1,15 +1,31 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
+import maya.cmds as cmds
+import maya.utils
 
-from .. import qt_ui, qt
-from .. import util, util_file
 
-if util.is_in_maya():
-    import maya.cmds as cmds
+from maya.app.general.mayaMixin import MayaQWidgetBaseMixin, MayaQWidgetDockableMixin
+from maya import OpenMayaUI as omui
 
-from .ui_lib import ui_rig
-from . import ui_core
+from vtool import qt_ui, qt
+from vtool import util, util_file
+
+from vtool.maya_lib.ui_lib import ui_fx, ui_shape_combo, ui_corrective
+from vtool.maya_lib.ui_lib import ui_rig
+from vtool.maya_lib.ui_lib import ui_anim
+from vtool.maya_lib.ui_lib import ui_model
+import ui_core
+
+from vtool.process_manager import process
+
+import core
+import attr
+import space
+import geo
+import deform
+import rigs_util
+import maya.mel as mel
+
 
 def load_into_tool_manager(window):
     
@@ -54,9 +70,7 @@ def picker():
     
 
 def tool_manager(name = None, directory = None):
-    """
-    This command launches the Vetala Hub UI that hosts many different UIs
-    """
+    
     workspace_name = ToolManager.title + 'WorkspaceControl'
     ui_core.delete_workspace_control(workspace_name)
     
@@ -77,9 +91,6 @@ def tool_manager(name = None, directory = None):
     return manager
 
 def process_manager(directory = None):
-    """
-    This command launches the process manager which lists processes, their data and code. 
-    """
     ui_core.delete_workspace_control(ui_rig.ProcessMayaWindow.title + 'WorkspaceControl')
     window = ui_rig.ProcessMayaWindow()
     
@@ -90,17 +101,7 @@ def process_manager(directory = None):
     
     return window
 
-def ramen():
-    
-    ui_core.delete_workspace_control(ui_rig.RamenMayaWindow.title + 'WorkspaceControl')
-    window = ui_rig.RamenMayaWindow()   
-    window.show()
-    return window
-
 def script_manager(directory):
-    """
-    This command launches a script manager ui which can be used for sharing scripts in a team. 
-    """
     ui_core.delete_workspace_control(ui_rig.ScriptMayaWindow.title + 'WorkspaceControl')
     window = ui_rig.ScriptMayaWindow()
        

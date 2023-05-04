@@ -1,9 +1,7 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
 import os
 import json
 import logging.config
-from . import util
+import util
 
 def setup_logging( default_path='logging.json',
                    level = None,

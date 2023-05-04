@@ -1,10 +1,8 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2014-2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
-
-from .. import qt_ui, qt
-from .. import util_file
-from .. import util
+from vtool import qt_ui, qt
+from vtool import util_file
+from vtool import util
 
 class SettingsWidget(qt_ui.BasicWidget):
     

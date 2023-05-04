@@ -1,12 +1,10 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import math
 
-from .. import util
+import vtool.util
 
-if util.is_in_maya():
+if vtool.util.is_in_maya():
     import maya.cmds as cmds
     
     import maya.OpenMaya as OpenMaya
@@ -18,32 +16,15 @@ if util.is_in_maya():
 
 
 allow_save = False
-
-after_save_callback = None
-
+    
 def start_check_after_save(function):
-    
-    global after_save_callback
-    
-    if after_save_callback != None:
-        try:
-            OpenMaya.MSceneMessage.removeCallback(after_save_callback)
-        except:
-            pass
     
     try:
         #function should accept arguments, clientData
-        callback_id = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterSave, function)
-        after_save_callback = callback_id
+        id = OpenMaya.MSceneMessage.addCallback(OpenMaya.MSceneMessage.kAfterSave, function)
     except:
         pass
-
-def remove_check_after_save():
-    global after_save_callback
     
-    if after_save_callback:
-        OpenMaya.MSceneMessage.removeCallback(after_save_callback)
-
 #--- old api
 
 def attribute_to_plug(attribute_name):
@@ -79,16 +60,11 @@ def create_mesh_from_mesh(mesh, target_transform):
         target_transform (str): The transform where the newly created mesh should live.
     """
     
-    
-    mesh = get_object(mesh)
-    transform = get_object(target_transform)
-    
-    mesh_fn = om.MFnMesh()
-    
-    result = mesh_fn.copy(mesh.node(), transform.node())
-    
-    return get_object_name(result)
-    
+    mesh_fn = OpenMaya.MFnMesh()
+    shape = nodename_to_mobject(mesh)
+
+    transform = nodename_to_mobject(target_transform)
+    mesh_fn.copy(shape.node(), transform.node())
 
 def duplicate(node):
     """
@@ -157,7 +133,7 @@ class MayaObject(ApiObject):
     
     def __init__(self, mobject = None):
 
-        if util.is_str(mobject):
+        if type(mobject) == str or type(mobject) == unicode:
             mobject = nodename_to_mobject(mobject)
             #self.api_object = self._define_api_object(mobject)
         
@@ -199,7 +175,7 @@ class DoubleArray(ApiObject):
         
         length = self.api_object.length()
         
-        for inc in range(0, length):
+        for inc in xrange(0, length):
             numbers.append( self.api_object[inc] )
         
         return numbers
@@ -212,7 +188,7 @@ class PointArray(ApiObject):
         values = []
         length = self.api_object.length()
         
-        for inc in range(0, length):
+        for inc in xrange(0, length):
             point = OpenMaya.MPoint()
             
             point = self.api_object[inc]
@@ -384,7 +360,7 @@ class TransformFunction(MayaFunction):
         """
         Not working as expected, need to work on it.
         """
-        util.warning('get_vector_matrix_product does not work... yet')
+        vtool.util.warning('get_vector_matrix_product does not work... yet')
         vector_api = OpenMaya.MVector()
         vector_api.x = vector[0]
         vector_api.y = vector[1]
@@ -571,7 +547,7 @@ class MeshFunction(MayaFunction):
         if not at_source_position:
             return [new_point.x, new_point.y, new_point.z]
         if at_source_position:
-            position = util.vector_add(source_vector, new_point)
+            position = vtool.util.vector_add(source_vector, new_point)
             return position
             
     def get_closest_intersection(self, source_vector, direction_vector):
@@ -828,7 +804,7 @@ class NurbsSurfaceFunction(MayaFunction):
         if not at_source_position:
             return vector
         if at_source_position:
-            position = util.vector_add(source_vector, vector)
+            position = vtool.util.vector_add(source_vector, vector)
             return position
         
     
@@ -860,7 +836,7 @@ class NurbsCurveFunction(MayaFunction):
         
         found = []
         
-        for inc in range(0, point.length()):
+        for inc in xrange(0, point.length()):
         
             x = point[inc][0]
             y = point[inc][1]
@@ -955,7 +931,7 @@ class SkinClusterFunction(MayaFunction):
         
         influence_names = []
         
-        for x in range( influence_dag_paths.length() ):
+        for x in xrange( influence_dag_paths.length() ):
             
             if not short_name:
                 influence_path_name = influence_dag_paths[x].fullPathName()
@@ -972,7 +948,7 @@ class SkinClusterFunction(MayaFunction):
         
         influence_ids = []
         
-        for x in range( influence_dag_paths.length() ):
+        for x in xrange( influence_dag_paths.length() ):
             
             influence_id = int(self.api_object.indexForInfluenceObject(influence_dag_paths[x]))
             influence_ids.append(influence_id)  
@@ -986,7 +962,7 @@ class SkinClusterFunction(MayaFunction):
         influence_ids = {}
         influence_names = []
         
-        for x in range( influence_dag_paths.length() ):
+        for x in xrange( influence_dag_paths.length() ):
             
             influence_path = influence_dag_paths[x]
             if not short_name:
@@ -1021,7 +997,7 @@ class SkinClusterFunction(MayaFunction):
         
         vert_count = weight_list_plug.numElements()
         
-        for vertex_id in range(vert_count):
+        for vertex_id in xrange(vert_count):
         
             weights_plug.selectAncestorLogicalIndex(vertex_id, weight_list_attr)
             
@@ -1074,7 +1050,7 @@ class IterateGeometry(MayaIterator):
         
         found = []
         
-        for inc in range(0, points.length()):
+        for inc in xrange(0, points.length()):
         
             x = points[inc][0]
             y = points[inc][1]
@@ -1170,7 +1146,7 @@ class IteratePolygonFaces(MayaIterator):
     def get_face_center_vectors(self):
         center_vectors = []
         
-        for inc in range(0, self.api_object.count()):
+        for inc in xrange(0, self.api_object.count()):
             
             point = self.api_object.center()
             
@@ -1190,7 +1166,7 @@ class IteratePolygonFaces(MayaIterator):
         while not self.api_object.isDone():
             center = self.api_object.center()
             
-            distance = util.get_distance(vector, [center.x,center.y,center.z])
+            distance = vtool.util.get_distance(vector, [center.x,center.y,center.z])
             
             if distance < 0.001:
                 closest_face = self.api_object.index()
@@ -1335,13 +1311,6 @@ def get_object(name):
     
     return selection_list.getDependNode(0)
 
-def get_object_name(mobject):
-    
-    dag_path = om.MDagPath()
-    path = dag_path.getAPathTo(mobject)
-    return path.partialPathName()
-    
-
 def get_plug(attribute_name):
     selection = om.MSelectionList()
     selection.add(attribute_name)
@@ -1350,12 +1319,13 @@ def get_plug(attribute_name):
     return plug
 
 def get_mesh_points(name):
-    
+    watch = vtool.util.StopWatch()
+    watch.start('api get points')
     mobject = get_object(name)
     
     meshfn = om.MFnMesh(mobject)
     points = meshfn.getPoints()
-    
+    watch.end()
     return points
      
 
@@ -1380,22 +1350,6 @@ def get_triangle_ids(mesh, face_id, triangle_id):
     point_array, int_array = mit_mesh_polygon.getTriangle(triangle_id)
     
     return int_array
-
-def get_border_edges(mesh):
-    
-    mobject = get_object(mesh)
-    iterator = om.MItMeshEdge(mobject)
-    
-    found = []
-    
-    while not iterator.isDone():
-        
-        if iterator.onBoundary():
-            found.append(iterator.index())
-        
-        iterator.next()
-        
-    return found
     
 def get_skin_weights_dict(skinCluster, vert_ids = []):
 
@@ -1512,7 +1466,7 @@ def get_surrounding_vertex_indices(mesh, index):
         for vert in verts:
             found_verts[vert] = None
     
-    return list(found_verts.keys())
+    return found_verts.keys()
     
 
 def get_vert_count(mesh):
@@ -1562,7 +1516,7 @@ def get_vertex_islands(mesh):
         found = {}
         current = iterator.index()
         
-        if current in checked:
+        if checked.has_key(current):
             iterator.next()
             continue
          
@@ -1576,7 +1530,7 @@ def get_vertex_islands(mesh):
             
             for vert in verts:
                 
-                if not vert in checked:
+                if not checked.has_key(vert):
                     
                     sub_verts = get_connected_verts(mesh, vert, iterator)
                     
@@ -1587,7 +1541,7 @@ def get_vertex_islands(mesh):
                 checked[vert] = None
                 
             if sub_verts:
-                verts = list(sub_found.keys())
+                verts = sub_found.keys()
             else:
                 verts = None
         
@@ -1598,7 +1552,7 @@ def get_vertex_islands(mesh):
     result = []
     
     for key in islands:
-        result.append(list(islands[key].keys()))
+        result.append(islands[key].keys())
     
     return result
 
@@ -1612,7 +1566,7 @@ def get_skin_influence_names(skin_cluster, short_name = False):
     
     influence_names = []
     
-    for x in range( len(influence_dag_paths) ):
+    for x in xrange( len(influence_dag_paths) ):
         
         if not short_name:
             influence_path_name = influence_dag_paths[x].fullPathName()
@@ -1633,7 +1587,7 @@ def get_skin_influence_indices(skin_cluster):
  
     influence_ids = []
     
-    for x in range( len(influence_dag_paths) ):
+    for x in xrange( len(influence_dag_paths) ):
         
         influence_id = int(skin.indexForInfluenceObject(influence_dag_paths[x]))
         influence_ids.append(influence_id)  
@@ -1650,7 +1604,7 @@ def get_skin_influence_dict(skin_cluster, short_name = False):
     influence_ids = {}
     influence_names = []
     
-    for x in range( len(influence_dag_paths) ):
+    for x in xrange( len(influence_dag_paths) ):
         
         influence_path = influence_dag_paths[x]
         if not short_name:
@@ -1685,109 +1639,11 @@ def get_geometry_filter(deformer):
 def get_skin_components(skin_cluster, index):
     
     geo_filter = get_geometry_filter(skin_cluster)
+    fnSet = om.MFnSet( geo_filter.deformerSet )
+    members = fnSet.getMembers(flatten = True)
     
-    if util.get_maya_version() < 2022:
-        
-        fnSet = om.MFnSet( geo_filter.deformerSet )
-        members = fnSet.getMembers(flatten = True)
-        
-        dag, component = members.getComponent(index)
-        return dag, component
-    
-    if util.get_maya_version() > 2020:
-        
-        output_object = geo_filter.outputShapeAtIndex(index)
-        
-        iterator = om.MItGeometry(output_object)
-        
-        
-        dagpath = om.MDagPath()
-        
-        if output_object.hasFn(om.MFn.kDagNode):
-            dagpath = om.MDagPath.getAPathTo(output_object)
-        else:
-            return None, None
-        
-        api_type = output_object.apiType() 
-        
-        if api_type == om.MFn.kMesh or api_type == om.MFn.kNurbsCurve:
-            count = iterator.exactCount()
-            indices = list(range(0,count))
-            components = get_components(indices)
-            
-        if api_type == om.MFn.kNurbsSurface:
-            
-            nurbs_fn = om.MFnNurbsSurface(output_object)
-            
-            dagpath = om.MDagPath.getAPathTo(output_object)
-            
-            nurbs_name = dagpath.fullPathName()
-            
-            cvs = cmds.ls('%s.cv[*][*]' % nurbs_name, flatten = True)
-            
-            indices = []
-            
-            for cv in cvs:
-                numbers = util.get_square_bracket_numbers(cv)
-                numbers.reverse()
-                indices.append(numbers)
-            
-            """
-            surf_it = om.MItSurfaceCV(output_object)
-            
-            indices = []
-            
-            inc = 0
-            
-            while not surf_it.isDone():
-                
-                inc += 1
-                
-                inc2 = 0
-                
-                while not surf_it.isRowDone():
-                    
-                    inc2 += 1
-                    
-                    index =  surf_it.uvIndices()
-                    
-                    indices.append([index[1], index[0]])
-                    
-                    surf_it.next()
-                    if inc2 == 10:
-                        break
-                
-                surf_it.nextRow()
-                
-                if inc == 10:
-                    break
-            
-            """
-            double_component = om.MFnDoubleIndexedComponent()
-            components = double_component.create(om.MFn.kSurfaceCVComponent)
-            double_component.addElements(indices)
-            
-        if api_type == om.MFn.kLattice:
-            dagpath = om.MDagPath.getAPathTo(output_object)
-            
-            lattice_name = dagpath.fullPathName()
-            
-            pts = cmds.ls('%s.pt[*][*][*]' % lattice_name, flatten = True)
-            
-            indices = []
-            
-            for pt in pts:
-                numbers = util.get_square_bracket_numbers(pt)
-                indices.append(numbers)
-            
-            triple_component = om.MFnTripleIndexedComponent()
-            components = triple_component.create(om.MFn.kLatticeComponent)
-            triple_component.addElements(indices)
-        
-        return dagpath, components
-        
-        
-        
+    dag, component = members.getComponent(index)
+    return dag, component 
 
 def get_components(indices):
 
@@ -1816,7 +1672,7 @@ def set_skin_weights(skin_cluster, weights = 0, index = 0, components = None, in
         
         int_influence_array = om.MIntArray()
         
-        for inc in range(0,influence_count):
+        for inc in xrange(0,influence_count):
             int_influence_array.append(influence_array[inc])
         
         influence_array = int_influence_array
@@ -1826,7 +1682,7 @@ def set_skin_weights(skin_cluster, weights = 0, index = 0, components = None, in
         influence_count = len(influence_dag_paths)
         influence_array =  om.MIntArray()
     
-        for inc in range(0,influence_count):
+        for inc in xrange(0,influence_count):
             
             index = skin_fn.indexForInfluenceObject(influence_dag_paths[inc])
             influence_array.append(index)
@@ -1847,7 +1703,7 @@ def set_skin_weights(skin_cluster, weights = 0, index = 0, components = None, in
             
             for weight in weights:
                 weight_array.append(float(weights))
-    
+
     skin_fn.setWeights(dag_path, components,influence_array,weight_array, False, False)
     
 def set_skin_blend_weights(skin_cluster, weights, index):

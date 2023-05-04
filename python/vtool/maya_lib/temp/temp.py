@@ -1,4 +1,3 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
 #!/usr/bin/env python2
 
 import os
@@ -277,7 +276,7 @@ class TheUI(QtGui.QDialog):
                                          ''')
 
         self.resize(500, 350)
-        for i in range(6):
+        for i in xrange(6):
             item = self.addCmd(i)
             if i in (3, 4):
                 self.addChildCmd()

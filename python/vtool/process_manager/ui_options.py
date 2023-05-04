@@ -1,16 +1,13 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2016 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import string
 
-from .. import qt_ui, qt
-from . import ui_code
-from .. import util
-from .. import util_file
+from vtool import qt_ui, qt
+from vtool.process_manager import ui_code
+from vtool import util
+from vtool import util_file
 
-from . import process
-process_module = process
+import vtool.process_manager.process as process_module
 
 from vtool import logger
 log = logger.get_logger(__name__) 
@@ -264,15 +261,10 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
         self.top_parent = self
         if not hasattr(self, 'ref_path'):
             self.ref_path = None
-            
-        self._right_click_check_widget = False
         
     def _item_menu(self, position):
         
         widget = self.childAt(position)
-        
-        if self._right_click_check_widget and not widget:
-            return
         
         if self._is_child_of_ref_widget(widget):
             return
@@ -375,7 +367,7 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
         
             
             
-            group_name = '.'.join(split_name[:-1])
+            group_name = string.join(split_name[:-1], '.')
             #group_name = group_name + '.'
             
         scope = self
@@ -694,10 +686,10 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
             
             
             if split_name[-1] == '':
-                search_group = '.'.join(split_name[:-2])
+                search_group = string.join(split_name[:-2], '.')
                 name = split_name[-2]
             if not split_name[-1] == '':
-                search_group = '.'.join(split_name[:-1])
+                search_group = string.join(split_name[:-1], '.')
                 name = split_name[-1]
                 
             widget = self._find_group_widget(search_group)
@@ -711,9 +703,11 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
                 
                 is_group = True
                 
-                parent_name = '.'.join(split_name[:-1])
+                parent_name = string.join(split_name[:-1], '.')
                 
                 group = self._find_group_widget(parent_name)
+                
+                
                 
                 if not group:
                     
@@ -721,10 +715,7 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
                         self.add_group(name, value, widget)
                     if option_type == 'reference.group':
                         
-                        if type(value) == bool:
-                            path_to_process = ''
-                        else:
-                            path_to_process, _ = get_reference_option_info(value[1], self.process_inst)
+                        path_to_process, _ = get_reference_option_info(value[1], self.process_inst)
                         
                         ref_widget = self.add_ref_group(name, value, widget, ref_path = path_to_process)
                         
@@ -734,8 +725,8 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
                         
             if len(split_name) > 1 and split_name[-1] != '':
                 
-                search_group = '.'.join(split_name[:-2])
-                after_search_group = '.'.join(split_name[:-1])
+                search_group = string.join(split_name[:-2], '.')
+                after_search_group = string.join(split_name[:-1], '.')
                 group_name = split_name[-2]
                 
                 group_widget = self._find_group_widget(search_group)
@@ -754,10 +745,10 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
             
             if not option_type and not is_group:
                 
-                if util.is_str(value):
+                if type(value) == str or type(value) == unicode:
                     log.info('string' )
                     sub_widget = self.add_string_option(name, value, widget)
-                        
+                    
                 if type(value) == float:
                     log.info('float' )
                     sub_widget = self.add_number_option(name, value, widget)
@@ -880,6 +871,7 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
         if self.__class__ == ProcessOptionPalette:
             name = 'the palette?'
         if not self.__class__ == ProcessOptionPalette:
+            
             name = 'group: %s?' % self.get_name()
         
         permission = qt_ui.get_permission('Clear all the widgets in %s' % name, self)
@@ -887,7 +879,6 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
         if permission == True:
             self.clear_widgets()
             self._write_options(clear = True)
-            self.process_inst._load_options()
             
     def _copy_widget(self):
         
@@ -1148,7 +1139,7 @@ class ProcessOptionPalette(qt_ui.BasicWidget):
             
         if type(value) == type(dict):
             
-            keys = list(dict.keys())
+            keys = dict.keys()
             if keys:
                 keys.sort()
             
@@ -1347,11 +1338,8 @@ class ProcessOptionGroup(ProcessOptionPalette):
         self.name = name
         
         super(ProcessOptionGroup, self).__init__()
-        
-        self._right_click_check_widget = True
-        
         self.setSizePolicy(qt.QSizePolicy(qt.QSizePolicy.Minimum, qt.QSizePolicy.Minimum))
-        self.main_layout.setContentsMargins(1,5,1,10)
+        self.main_layout.setContentsMargins(1,0,1,1)
         
         if hasattr(self, 'copy_action'):
             self.copy_action.setVisible(True)
@@ -1421,7 +1409,7 @@ class ProcessOptionGroup(ProcessOptionPalette):
         
         self.group.expand.connect(self._expand_updated)
         
-        #self.main_layout.addSpacing(10)
+        self.main_layout.addSpacing(10)
         self.main_layout.addWidget(self.group)
         
     def _expand_updated(self, value):
@@ -1560,10 +1548,7 @@ class OptionGroup(qt.QFrame):
     expand = qt_ui.create_signal(object)
     
     def __init__(self, name):
-        
-        
         super(OptionGroup, self).__init__()
-        
         
         self.close_height = 28
         if util.get_maya_version() < 2016:
@@ -1573,9 +1558,8 @@ class OptionGroup(qt.QFrame):
             
         self.layout = qt.QVBoxLayout()
         self.child_layout = qt.QVBoxLayout()
-        self.child_layout.setContentsMargins(0,6,0,10)
+        self.child_layout.setContentsMargins(0,2,0,3)
         self.child_layout.setSpacing(0)
-        
         
         self.setLayout(self.layout)
         
@@ -1732,14 +1716,6 @@ class ProcessReferenceGroup(ProcessOptionGroup):
 
         self.group.header_layout.addWidget(script)
         
-        palette = self.group.palette()
-        if util.in_maya:
-            palette.setColor(self.backgroundRole(), qt.QColor(80,85,90))
-        else:
-            palette.setColor(self.backgroundRole(), qt.QColor(220,220,230))
-        self.group.setPalette(palette)
-        self.setAutoFillBackground(True)
-        
     def _store_script(self):
         self.update_values.emit(False)
         
@@ -1762,6 +1738,7 @@ class ProcessReferenceGroup(ProcessOptionGroup):
             return
         
         path_to_process, option_group = self.get_reference_info()
+        util_file.fix_slashes(path_to_process)
         
         current_widget_name = self._get_path(self)
         
@@ -2275,7 +2252,6 @@ class ProcessNote(ProcessOption):
         
         self.main_layout.setContentsMargins(0,2,0,2)
         
-        
         self.option_widget.setSizePolicy(qt.QSizePolicy.Minimum, qt.QSizePolicy.Minimum)
         #self.option_widget.setWordWrapMode(qt.QTextOption.NoWrap)
         self.main_layout.insertWidget(0, self.title)
@@ -2373,9 +2349,7 @@ class ProcessOptionText(ProcessOption):
         return 'text'
         
     def _define_option_widget(self):
-        string_ui = qt_ui.GetString(self.name)
-        string_ui.set_select_button(True)
-        return string_ui
+        return qt_ui.GetString(self.name)
         
     def _setup_value_change(self):
         
@@ -2488,12 +2462,7 @@ def get_reference_option_info(script, process_inst):
     except:
         pass
     
-    path_to_process = ''
-    option_group = ''
-    
-    #if 'path_to_process' in builtins:
     path_to_process = builtins['path_to_process']
-    #if 'option_group' in builtins:
     option_group = builtins['option_group']
     
     return path_to_process, option_group

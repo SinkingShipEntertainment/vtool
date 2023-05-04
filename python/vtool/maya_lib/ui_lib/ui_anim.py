@@ -1,9 +1,11 @@
 # Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
-from __future__ import absolute_import
 
-from ... import qt_ui, qt
-from . import ui_character
-from .. import rigs_util
+from vtool import qt_ui, qt
+from vtool.maya_lib.ui_lib import ui_character
+    
+from vtool.maya_lib import ui_core
+
+from vtool.maya_lib import rigs_util
 
 class AnimationManager(qt_ui.BasicWidget):
     def _build_widgets(self):

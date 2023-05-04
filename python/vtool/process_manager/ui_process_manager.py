@@ -1,24 +1,23 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 import sys
+
+from vtool import qt_ui, qt, maya_lib
+
+from vtool import util_file
+from vtool import util
+
+import process
+import ui_view
+import ui_options
+import ui_templates
+import ui_process_settings
+import ui_process_maintenance
+import ui_data
+import ui_code
+import ui_settings
+
 from functools import wraps
-
-from .. import qt_ui, qt, maya_lib
-from .. import logger
-from .. import util_file
-from .. import util
-
-from . import process
-from . import ui_view
-from . import ui_options
-from . import ui_templates
-from . import ui_process_settings
-from . import ui_process_maintenance
-from . import ui_data
-from . import ui_code
-from . import ui_settings
 
 in_maya = False
 
@@ -26,7 +25,7 @@ if util.is_in_maya():
     in_maya = True
     import maya.cmds as cmds
 
-
+from vtool import logger
 log = logger.get_logger(__name__) 
 
 vetala_version = util_file.get_vetala_version()
@@ -35,36 +34,22 @@ def decorator_process_run(function):
     @wraps(function)
     def wrapper(*args, **kwargs):
         
-        return_value = None
-        self = args[0]
+        args[0].continue_button.hide()
         
-        if not self.continue_button.isVisible():
-            self.process.reset_runtime()
-        
-        self.continue_button.hide()
         
         #before        
-        self.kill_process = False
+        args[0].kill_process = False
                 
-        self.stop_button.show()
+        args[0].stop_button.show()
         
-        self.process_button.setDisabled(True)
-        self.batch_button.setDisabled(True)
+        args[0].process_button.setDisabled(True)
+        args[0].batch_button.setDisabled(True)
         
         #process function
-        
-        if self._process_put:
-            self.process._put = self._process_put
-        if self._process_runtime_values:
-            self.process.runtime_values = self._process_runtime_values
-        
         try:
             return_value = function(*args, **kwargs)
         except:
             pass
-        
-        self._process_runtime_values = self.process.runtime_values
-        self._process_put = self.process._put
         
         #after
         util.set_env('VETALA_RUN', False)
@@ -98,7 +83,6 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         self._path_filter = ''
         
         self._process_runtime_values = {}
-        self._process_put = None
         
         self.process = process.Process()
         
@@ -501,7 +485,7 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         #self._update_process(None)
         
         #self._update_sidebar_tabs()
-        self._set_title(None)
+        
         self.build_widget.hide()
         self._close_tabs()
         
@@ -1124,7 +1108,13 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
     def _open_help(self):
         
-        util_file.open_website('https://vetala-auto-rig.readthedocs.io/en/latest/index.html')
+        filename = __file__
+        folder = util_file.get_dirname(filename)
+        
+        split_folder = folder.split('\\')
+        folder = split_folder[:-1]
+        
+        util_file.open_website('http://docs.vetalarig.com')
         
     def _load_code_ui(self):
         
@@ -1285,7 +1275,7 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
         code_directory = self.settings.get('code_directory')
         self.process.set_external_code_library(code_directory)
-        
+        self.process.set_runtime_dict(self._process_runtime_values)
         
         if in_maya:
             
@@ -1335,14 +1325,15 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
         manage_node_editor_inst = None
         
-        if in_maya:
+        if util.is_in_maya():
             
             start_new_scene = self.settings.get('start_new_scene_on_process')
+            
+            manage_node_editor_inst = maya_lib.core.ManageNodeEditors()
             
             if start_new_scene and not has_last_inc:
                 core.start_new_scene()
             
-            manage_node_editor_inst = maya_lib.core.ManageNodeEditors()
             manage_node_editor_inst.turn_off_add_new_nodes()
                 
         util.set_env('VETALA_RUN', True)
@@ -1375,7 +1366,6 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
         for inc in range(start, script_count):
             
-            progress_bar.set_count(script_count)
             if util.get_env('VETALA_RUN') == 'True':
                 if util.get_env('VETALA_STOP') == 'True':
                     if progress_bar:
@@ -1449,11 +1439,10 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
                     cmds.select(cl = True)
                     core.auto_focus_view()
                 
-                #-----------------------------Run the Script-------------------------------
-                status = self.process.run_script(script_name, False, self.settings.settings_dict, return_status=True)
+                status = self.process.run_script(script_name, False, self.settings.settings_dict)
                 
-                
-                self.code_widget.script_widget.code_manifest_tree.set_process_data(self.process.runtime_values, self.process._put)
+                self._process_runtime_values = self.process.runtime_values
+                self.code_widget.script_widget.code_manifest_tree.set_process_runtime_dict(self.process.runtime_values)
                 
                 temp_log = util.get_last_temp_log()
                 
@@ -1499,9 +1488,9 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         minutes, seconds = watch.stop()
         
         if minutes == None:
-            util.show('\nProcess %s built in %s seconds\n\n' % (self.process.get_name(), seconds))
+            util.show('Process %s built in %s seconds\n\n' % (self.process.get_name(), seconds))
         if minutes != None:
-            util.show('\nProcess %s built in %s minutes, %s seconds\n\n' % (self.process.get_name(), minutes,seconds))
+            util.show('Process %s built in %s minutes, %s seconds\n\n' % (self.process.get_name(), minutes,seconds))
         
         if errors:
             util.show('Process %s finished with errors.\n' % self.process.get_name())

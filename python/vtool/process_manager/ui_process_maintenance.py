@@ -1,14 +1,12 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
+# Copyright (C) 2019 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
-from __future__ import absolute_import
+from vtool import qt, qt_ui
+from vtool import util_file
 
-from .. import qt, qt_ui
-from .. import logger
+import process
+import ui_view
 
-from . import process
-from . import ui_view
-
-
+from vtool import logger
 log = logger.get_logger(__name__)
 
 class ProcessMaintenance(qt_ui.BasicWidget):

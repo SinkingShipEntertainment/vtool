@@ -1,7 +1,4 @@
-# Copyright (C) 2022 Louis Vottero louis.vot@gmail.com    All rights reserved.
-
-from __future__ import print_function
-from __future__ import absolute_import
+# Copyright (C) 2014 Louis Vottero louis.vot@gmail.com    All rights reserved.
 
 from collections import OrderedDict
 import json
@@ -11,6 +8,7 @@ import shutil
 import imp
 import traceback
 import getpass
+import string
 import re
 import datetime
 import subprocess
@@ -19,11 +17,12 @@ import threading
 import stat
 import ast
 import filecmp
-import time
-import hashlib
 
-from . import util
-from . import logger
+import util
+
+import time
+
+from vtool import logger
 log = logger.get_logger(__name__) 
 
 def get_permission(filepath):
@@ -49,21 +48,15 @@ def get_permission(filepath):
     
     if util.is_windows():
         if permission < 666:
-            try:
-                os.chmod(filepath, 0o666)
-                return True
-            except:
-                util.warning('Could not upgrade permission on: %s' % filepath)
-                return False
-        
-        
+            return False
         else:
             return True
         
+    
     if permission < 775:
         
         try:
-            os.chmod(filepath, 0o777)
+            os.chmod(filepath, 0777)
         except:
             util.warning('Could not upgrade permission on: %s' % filepath)
             #status = traceback.format_exc()
@@ -75,7 +68,7 @@ def get_permission(filepath):
         return True
     
     try:
-        os.chmod(filepath, 0o777)
+        os.chmod(filepath, 0777)
         return True
     except:
         return False
@@ -95,7 +88,7 @@ def get_vetala_version():
     
     split_line = version_lines[0].split(':')
     
-    if not len(split_line) > 1:
+    if not split_line > 1:
         return ''
     
     version = split_line[1]
@@ -118,7 +111,7 @@ class ProcessLog(object):
         
         self.log_path = create_dir('.log', self.log_path)
         
-        date_and_time = get_date_and_time(separators = False)
+        date_and_time = get_date_and_time()
         
         self.log_path = create_dir('log_' % date_and_time, self.log_path)
     
@@ -469,6 +462,8 @@ class VersionFile(object):
                     user = line_info_dict['user']
                     user = user[1:-1]
                 
+                keys = version_paths.keys()
+                
                 version_file = version_paths[(version)]
                 version_file = join_path(self.filepath, '%s/%s' % (self.version_folder_name, version_file))
                 
@@ -749,7 +744,7 @@ class SettingsFile(object):
             self.settings_dict = {}
             return
         
-        self.settings_order = list(data.keys())
+        self.settings_order = data.keys()
         self.settings_dict = data
         
     def _update_old(self, filename):
@@ -801,7 +796,7 @@ class SettingsFile(object):
             
         out_data = OrderedDict(out_list)
         
-        set_json(filepath, list(out_data.items()))
+        set_json(filepath, out_data.items())
         
     def set(self, name, value):
                 
@@ -1239,9 +1234,6 @@ class ReadCache(object):
     @classmethod
     def cache_read_data(cls, path):
         
-        if not path:
-            return
-        
         log.info('Caching %s' % path)
         file_data = None
         
@@ -1416,44 +1408,6 @@ def get_files(directory, filter_text = ''):
     
     return found
 
-def get_code_folders(directory, recursive = False, base_directory = None):
-    if not exists(directory):
-        return
-    
-    found_folders = []
-    
-    folders = get_folders(directory)
-    
-    if not base_directory:
-        base_directory = directory
-    
-    for folder in folders:
-        
-        if folder == 'version':
-            version = VersionFile(directory)
-            if version.updated_old:
-                continue
-        
-        if folder.startswith('.'):
-            continue
-        
-        if folder == '__pycache__':
-            continue
-
-        folder_path = join_path(directory, folder)
-        
-        folder_name = os.path.relpath(folder_path,base_directory)
-        folder_name = fix_slashes(folder_name)
-        
-        found_folders.append(folder_name)
-        
-        if recursive:
-            sub_folders = get_code_folders(folder_path, recursive, base_directory)
-            
-        found_folders += sub_folders
-        
-    return found_folders
-
 def get_folders_without_prefix_dot(directory, recursive = False, base_directory = None):
     
     if not exists(directory):
@@ -1517,7 +1471,7 @@ def get_folders_without_prefix_dot(directory, recursive = False, base_directory 
      
     return found_folders
 
-def get_folders(directory, recursive = False, filter_text = '', skip_dot_prefix = False):
+def get_folders(directory, recursive = False):
     """
     Get folders found in the directory.
     
@@ -1541,34 +1495,36 @@ def get_folders(directory, recursive = False, filter_text = '', skip_dot_prefix 
             found_folders = next(os.walk(directory))[1]
         except:
             found_folders = []
+        
+        """
+        try:
+            files = os.listdir(directory)
+        except:
+            return found_folders
+        
+        if not files:
+            return found_folders
+        
+        for filename in files:
             
+            folder_name = join_path(directory, filename)
+            if is_dir(folder_name):
+                folder_name = os.path.relpath(folder_name,directory)
+                folder_name = fix_slashes(folder_name)
+            
+                found_folders.append(folder_name)
+        """
+        
     if recursive:
         try:
             for root, dirs, files in os.walk(directory):
                 
                 for folder in dirs:
                     
-                    if filter_text:
-                        if folder.find(filter_text) > -1:
-                            continue
-                    
-                    if skip_dot_prefix:
-                        if folder.startswith('.'):
-                            continue
-                    
                     folder_name = join_path(root, folder)
                     
                     folder_name = os.path.relpath(folder_name,directory)
-                    
-                    if filter_text:
-                        if folder_name.find(filter_text) > -1:
-                            continue
-                    
                     folder_name = fix_slashes(folder_name)
-                    
-                    if skip_dot_prefix:
-                        if folder_name.startswith('.') or folder_name.find('/.') > -1:
-                            continue
                     
                     found_folders.append(folder_name)
         except:
@@ -1759,10 +1715,17 @@ def get_folder_size(path, round_value = 2, skip_names = []):
             
     return size
 
-def format_date_time(python_date_time_value, separators = True):
+def get_date():
     
-    date_value = python_date_time_value
+    date_value = datetime.datetime.now()
+    year = date_value.year
+    month = date_value.month
+    day = date_value.day
     
+    return '%s_%s_%s' % (year,month,day)
+
+def get_date_and_time():
+    date_value = datetime.datetime.now()
     year = date_value.year
     month = date_value.month
     day = date_value.day
@@ -1780,27 +1743,7 @@ def format_date_time(python_date_time_value, separators = True):
     if len(second) == 1:
         second = second + '0'
 
-    value = ''
-    if separators:
-        value = '%s-%s-%s  %s:%s:%s' % (year,month,day,hour,minute,second)
-    if not separators:
-        value = '%s%s%s%s%s%s' % (year,month,day,hour,minute,second) 
-    
-    return value
-
-def get_date():
-    
-    date_value = datetime.datetime.now()
-    year = date_value.year
-    month = date_value.month
-    day = date_value.day
-    
-    return '%s-%s-%s' % (year,month,day)
-
-def get_date_and_time(separators = True):
-    date_time_value = datetime.datetime.now()
-    
-    return format_date_time(date_time_value, separators)
+    return '%s_%s_%s__%s_%s_%s' % (year,month,day,hour,minute,second)
 
 def get_last_modified_date(filepath):
     """
@@ -1815,11 +1758,25 @@ def get_last_modified_date(filepath):
     
     mtime = os.path.getmtime(filepath)
     
-    date_time_value = datetime.datetime.fromtimestamp(mtime)
+    date_value = datetime.datetime.fromtimestamp(mtime)
+    year = date_value.year
+    month = date_value.month
+    day = date_value.day
     
-    formatted_value = format_date_time(date_time_value)
+    hour = str(date_value.hour)
+    minute = str(date_value.minute)
+    second = date_value.second
     
-    return formatted_value
+    second = str( int(second) )
+    
+    if len(hour) == 1:
+        hour = '0'+hour
+    if len(minute) == 1:
+        minute = '0'+minute
+    if len(second) == 1:
+        second = second + '0'
+
+    return '%s-%s-%s  %s:%s:%s' % (year,month,day,hour,minute,second)
     
 def get_user():
     """
@@ -1861,17 +1818,6 @@ def get_file_lines(filepath):
         
     Returns:
         list
-    """
-    """
-    lines = []
-    try:
-        with open(filepath, 'r') as open_file:
-            for line in open_file:
-                lines.append(line)
-            #return open_file.readlines()
-    except:
-        pass
-    return lines
     """
     
     text = get_file_text(filepath)
@@ -1978,11 +1924,8 @@ def is_dir(directory, case_sensitive = False):
         parent_folder = get_dirname(directory)
         folder = get_basename(directory)
         
-        try:
-            if folder in os.listdir(parent_folder):
-                return True
-        except:
-            pass
+        if folder in os.listdir(parent_folder):
+            return True
         else:
             return False
     
@@ -2103,7 +2046,7 @@ def remove_extension(path):
     new_name = path
     
     if len(dot_split) > 1:
-        new_name = '.'.join(dot_split[:-1])
+        new_name = string.join(dot_split[:-1], '.')
     
     return new_name
 
@@ -2132,7 +2075,7 @@ def get_common_path(path1, path2):
         if first_list[inc] != second_list[inc]:
             break
         
-    found = '/'.join(found)
+    found = string.join(found, '/')
     
     return found
 
@@ -2170,7 +2113,7 @@ def remove_common_path(path1, path2):
         if not skip:
             new_path.append(split_path2[inc])
 
-    new_path = '/'.join(new_path)
+    new_path = string.join(new_path, '/')
     
     return new_path
 
@@ -2294,6 +2237,10 @@ def fix_slashes(directory):
     
     directory = directory.replace('\\','/')
     
+    
+    if not directory.find('https://') > -1:
+        directory = directory.replace('//', '/')
+    
     return directory
 
 def set_windows_slashes(directory):
@@ -2306,7 +2253,7 @@ def set_windows_slashes(directory):
     
     directory = directory.replace('/', '\\')
     directory = directory.replace('//', '\\')
-
+    
     return directory
     
 def join_path(directory1, directory2):
@@ -2416,7 +2363,7 @@ def write_lines(filepath, lines, append = False):
     
     write_string = 'w'
     
-    text = '\n'.join(map(str, lines))
+    text = string.join(map(str, lines), '\n')
     
     if append:
         write_string = 'a'
@@ -2461,13 +2408,12 @@ def create_dir(name, directory = None, make_unique = False):
     if make_unique:
         full_path = inc_path_name(full_path)   
     
-    if is_dir(full_path, case_sensitive=True):
+    if is_dir(full_path):
         return full_path
        
     try:
         os.makedirs(full_path)
     except:
-        util.error( traceback.format_exc() )
         return False
     
     get_permission(full_path)
@@ -2515,7 +2461,7 @@ def delete_read_only_error(action, name, exc):
     action(name)
     
 
-def refresh_dir(directory, delete_directory = True):
+def refresh_dir(directory):
     """
     Delete everything in the directory.
     """
@@ -2524,18 +2470,16 @@ def refresh_dir(directory, delete_directory = True):
     dir_name = get_dirname(directory)
     
     if exists(directory):
-        
         try:
-            files = get_files_and_folders(directory)
+            files = get_files(directory)
         except:
             files = []
         
         if files:
             for filename in files:
                 delete_file(filename, directory)
-        
-        if delete_directory:
-            delete_dir(base_name, dir_name)
+            
+        delete_dir(base_name, dir_name)
         
     if not exists(directory):
         create_dir(base_name, dir_name)
@@ -2613,7 +2557,7 @@ def copy_with_subprocess(cmd):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell = True)
     msg,err = proc.communicate()
     #if msg:print msg
-    if err:print(err)
+    if err:print err
 
 def fast_copy(directory, directory_destination):
     
@@ -2777,8 +2721,9 @@ def source_python_module(code_directory):
             remove_sourced_code(code_directory)
             
             fin = open(code_directory, 'r')
+            import md5
             
-            module_inst = imp.load_source(hashlib.md5(code_directory.encode()).hexdigest(), code_directory, fin)
+            module_inst = imp.load_source(md5.new(code_directory).hexdigest(), code_directory, fin)
             
             return module_inst
         
@@ -2859,19 +2804,6 @@ def run_python_module(script_path):
     
     return status
     
-def get_module_variables(module):
-    
-    variables = dir(module)
-    found = {}
-    
-    for variable in variables:
-        if variable.startswith('__') and variable.endswith('__'):
-            continue
-        
-        found[variable] = eval('module.'+variable)
-        
-    return found 
-    
 #--- code analysis
      
 
@@ -2886,7 +2818,7 @@ def get_package_path_from_name(module_name, return_module_path = False):
     split_name = module_name.split('.')
     
     if len(split_name) > 1:
-        sub_path = '/'.join(split_name[:-1])
+        sub_path = string.join(split_name[:-1], '/')
     else:
         sub_path = module_name
     
@@ -3016,7 +2948,7 @@ def get_defined(module_path, name_only = False):
                     if sub_node.name == '__init__':
                         found_args = get_ast_function_args(sub_node)
                         if found_args:
-                            found_args_name = ','.join(found_args)
+                            found_args_name = string.join(found_args, ',')
                         if not found_args:
                             found_args_name = ''
                         class_name = '%s(%s)' % (node.name, found_args_name)
@@ -3049,8 +2981,6 @@ def get_defined_classes(module_path):
             
     return defined, defined_dict
 
-
-
 #--- ast
 
 def get_ast_function_name_and_args(function_node):
@@ -3059,7 +2989,7 @@ def get_ast_function_name_and_args(function_node):
     found_args = get_ast_function_args(function_node)
     
     if found_args:
-        found_args_name = ','.join(found_args)
+        found_args_name = string.join(found_args, ',')
     if not found_args:
         found_args_name = ''
     
@@ -3083,15 +3013,7 @@ def get_ast_function_args(function_node):
     inc = 0
     for arg in args:
         
-        if util.python_version < 3:
-            if not hasattr(arg, 'id'):
-                #name = arg.arg
-                #these are arguments stored in the instance. Could be handy to expose in the future.
-                continue
-            
-            name = arg.id
-        else:
-            name = arg.arg
+        name = arg.id
         
         if name == 'self':
             continue
@@ -3102,6 +3024,7 @@ def get_ast_function_args(function_node):
             default_value = defaults[inc]
         
         if default_value:
+            
             value = None
             
             if isinstance(default_value, ast.Str):
@@ -3110,23 +3033,12 @@ def get_ast_function_args(function_node):
                 value = default_value.id
             if isinstance(default_value, ast.Num):
                 value = default_value.n
-            if isinstance(default_value, ast.List):
-                
-                if hasattr(default_value, 'elts'):
-                    if not default_value.elts:
-                        value = '[]'
-            if util.python_version > 3:
-                if isinstance(default_value,ast.Constant):
-                    value = default_value.value
-                if isinstance(default_value, ast.NameConstant):
-                    value = default_value.value
-                
-            if value == None:
-                found_args.append('%s=None' % name)
-            else:
-                found_args.append('%s=%s' % (name, value))
             
-        if default_value == None:
+            if value:
+                found_args.append('%s=%s' % (name, value))
+            if not value:
+                found_args.append(name)
+        if not default_value:
             found_args.append(name)
             
         inc += 1
@@ -3335,9 +3247,6 @@ def open_browser(filepath):
     """
     
     if util.is_windows():
-        # os.startfile does not work with forward-slash UNC paths ("//host/share/directory")
-        # so we will convert to "\" backslashes on Windows.
-        filepath = set_windows_slashes(filepath)    # this will NOT change the caller's copy of the path
         os.startfile(filepath)
         
     if util.is_linux():
@@ -3383,37 +3292,13 @@ def get_mayapy():
     mayapy_path = '%s/bin/%s' % (dirpath,mayapy_file)    
     
     return mayapy_path
-    
-def get_mayabatch():
-    
-    dirpath = get_maya_path()
-    
-    if not dirpath:
-        return
-    
-    maya_file = 'mayabatch.exe'
-    
-    if util.is_linux():
-        maya_file = 'maya -batch'
-    
-    maya_path = '%s/bin/%s' % (dirpath,maya_file)    
-    
-    return maya_path
-    
+
 def get_process_batch_file():
     
     filepath = __file__
     filepath = get_dirname(filepath)
     
     batch_python = join_path(filepath, 'process_manager/batch.py')
-    
-    return batch_python
-
-def get_process_deadline_file():
-    filepath = __file__
-    filepath = get_dirname(filepath)
-    
-    batch_python = join_path(filepath, 'process_manager/batch_deadline.py')
     
     return batch_python
 
