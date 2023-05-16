@@ -1,6 +1,8 @@
 name = 'vetala'
 
-version = '0.5.799.sse.1.0.0'
+# NOTE: This is actually coming from the latest "main" branch that was a little
+# more updated than the actual tag 0.6.11
+version = '0.6.11.sse.1.0.0'
 
 authors = [
     'Louis Vottero',
@@ -9,18 +11,8 @@ authors = [
 description = '''Rig builder'''
 
 with scope('config') as c:
-    # Determine location to release: internal (int) vs external (ext)
-    # NOTE: Modify this variable to reflect the current package situation
-    release_as = 'ext'
-
-    # The 'c' variable here is actually rezconfig.py
-    # 'release_packages_path' is a variable defined inside rezconfig.py
-
     import os
-    if release_as == 'int':
-        c.release_packages_path = os.environ['SSE_REZ_REPO_RELEASE_INT']
-    elif release_as == 'ext':
-        c.release_packages_path = os.environ['SSE_REZ_REPO_RELEASE_EXT']
+    c.release_packages_path = os.environ['SSE_REZ_REPO_RELEASE_EXT']
 
 requires = [
     "maya",
