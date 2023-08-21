@@ -28,7 +28,7 @@ from . import ui_anim
 
 from ...process_manager import ui_process_manager
 from ...process_manager import ui_settings
-from ...ramen.ui_lib import ui_nodes
+from ...ramen.ui_lib import ui_ramen
 from ...script_manager import script_view
 
 
@@ -49,7 +49,7 @@ def shape_combo():
     ui_core.delete_workspace_control(ui_shape_combo.ComboManager.title + 'WorkspaceControl')
     
     window = ui_shape_combo.ComboManager()
-    
+    window.show()
     return window
     
 def checker():
@@ -115,7 +115,7 @@ class ProcessMayaSettingsWindow(ui_core.MayaDockMixin, ui_settings.SettingsWidge
     def __init__(self):
         super(ProcessMayaSettingsWindow, self).__init__()
 
-class RamenMayaWindow(ui_core.MayaDockMixin, ui_nodes.NodeWindow ):
+class RamenMayaWindow(ui_core.MayaDockMixin, ui_ramen.MainWindow ):
     title = 'RAMEN'
     def __init__(self):
         super(RamenMayaWindow, self).__init__()

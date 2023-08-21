@@ -10,6 +10,8 @@ import subprocess
 import inspect
 from functools import wraps
 
+from ..ramen import eval as ramen_eval 
+
 from .. import util
 from .. import util_file
 from .. import data
@@ -40,9 +42,18 @@ log = logger.get_logger(__name__)
 
 log.info('Accessing')
 
+def get_current_process_instance():
+    path = util_file.get_current_vetala_process_path()
+    
+    process_inst = Process()
+    process_inst.set_directory(path)
+    
+    return process_inst
+    
+
 def find_processes(directory = None, return_also_non_process_list = False, stop_at_one = False):
     """
-    This will try to find the processes in the supplied directory. If no directory supplied, it will search the current working directory.
+    This will try to find the processes in the supplied directory.
     
     Args:
         directory(str): The directory to search for processes.
@@ -51,11 +62,17 @@ def find_processes(directory = None, return_also_non_process_list = False, stop_
         list: The procceses in the directory.
     """
     
-    if not directory:
-        directory = util_file.get_cwd()
+    
     
     found = []
     found_non = []
+    
+    if not directory:
+        if return_also_non_process_list:
+            return [found, found_non]
+        else:
+            return found
+        #directory = util_file.get_cwd()
     
     log.debug('Find Processes %s' % directory)
     
@@ -265,6 +282,7 @@ class Process(object):
     description = 'process'
     data_folder_name = '.data'
     code_folder_name = '.code'
+    ramen_folder_name = '.ramen'
     backup_folder_name = '.backup'
     process_data_filename = 'manifest.data'
     enable_filename = '.enable'
@@ -287,6 +305,8 @@ class Process(object):
         self._option_result_function = None
         
         self._skip_children = None
+        
+        self._unreal_skeletal_mesh = None
 
     def _reset(self):
         self.parts = []
@@ -358,6 +378,7 @@ class Process(object):
             
             util_file.create_dir(self.data_folder_name, path)
             code_folder = util_file.create_dir(self.code_folder_name, path)
+            util_file.create_dir(self.ramen_folder_name, path)
             util_file.create_dir(self.backup_folder_name, path)
             
             manifest_folder = util_file.join_path(code_folder, 'manifest')
@@ -984,12 +1005,9 @@ class Process(object):
         
         backup_path = util_file.create_dir('temp_process_backup', backup_path)
         
-        target_process = Process()
-        target_process.set_directory(backup_path)
-        
         util.show('Backing up to custom directory: %s' % backup_path)
         
-        copy_process(self, target_process)
+        copy_process(self, backup_path)
         
         version = util_file.VersionFile(backup_path)
         version.save(comment)
@@ -1955,7 +1973,16 @@ class Process(object):
         folder = self.get_code_folder(code_name)
         
         util_file.delete_versions(folder, keep)
-        
+    
+    #--- Ramen
+    
+    def get_ramen_path(self):
+        """
+        Returns:
+            str: The path to the code folder for this process.
+        """
+        return self._get_path(self.ramen_folder_name)
+    
     #--- settings
     
     def get_setting_names(self):
@@ -3355,7 +3382,22 @@ class Process(object):
         else:
             self.runtime_values = {}
             self._put = Put()
+    
+    #--- Ramen
+    def run_ramen(self):
         
+        ramen_path = self.get_ramen_path()
+        
+        full_path = '%s/graphs/graph1/ramen.json' % ramen_path
+        util.show('Running Ramen: %s' % full_path)
+        ramen_eval.run(full_path)
+        
+    def set_unreal_skeletal_mesh(self, filepath):
+        util.set_env('VETALA_CURRENT_PROCESS_SKELETAL_MESH', value)
+        self._unreal_skeletal_mesh = filepath
+        
+    def get_unreal_skeletal_mesh(self):
+        return self._unreal_skeletal_mesh
  
 class Put(dict):
     """
@@ -3435,7 +3477,7 @@ def copy(source_file_or_folder, target_file_or_folder, description = ''):
         version = util_file.VersionFile(copied_path)
         version.save('Copied from %s' % source_file_or_folder)
     
-def copy_process(source_process, target_process = None ):
+def copy_process(source_process, target_directory = None ):
     """
     source process is an instance of a process that you want to copy 
     target_process is the instance of a process you want to copy to. 
@@ -3444,16 +3486,17 @@ def copy_process(source_process, target_process = None ):
     If you need to give the copy a specific name, you should rename it after copy. 
     
     Args:
-        source_process (str): The instance of a process.
-        target_process (str): The instance of a process. If None give, duplicate the source_process.
+        source_process (instance): The instance of a process.
+        target_process (str): The directory to copy the process to. If None give, duplicate to the source_process parent directory. 
     """
     
-    parent = target_process.get_parent_process()
+    if target_directory:
+        parent_directory = util_file.get_dirname(target_directory)
     
-    if parent:
-        if parent.get_path() == source_process.get_path():
-            util.error('Cannot paste parent under child.  Causes recursion error')
-            return
+        if parent_directory:
+            if parent_directory == source_process.get_path():
+                util.error('Cannot paste parent under child.  Causes recursion error')
+                return
     
     
     sub_folders = source_process.get_sub_processes()
@@ -3461,27 +3504,19 @@ def copy_process(source_process, target_process = None ):
     source_name = source_process.get_name()
     source_name = source_name.split('/')[-1]
     
-    if not target_process:
-        target_process = Process()
-        target_process.set_directory(source_process.directory)
+    if not target_directory:
+        target_directory = util_file.get_dirname(source_process.get_path())
     
-    if not util_file.get_permission( target_process.get_path() ):
-        util.warning('Could not get permsision in directory: %s' % target_process.get_path())
+    if not util_file.get_permission( target_directory ):
+        util.warning('Could not get permsision in directory: %s' % target_directory)
         return
     
-    if source_process.process_name == target_process.process_name and source_process.directory == target_process.directory:
-        
-        parent_process = target_process.get_parent_process()
-        
-        if parent_process:
-            target_process = parent_process
-        
+    new_name = get_unused_process_name(target_directory, source_name)
     
-    path = target_process.get_path()
-    
-    new_name = get_unused_process_name(path, source_name)
-    
-    new_process = target_process.add_part(new_name)
+    new_process = Process()
+    new_process.set_directory(target_directory)
+    new_process.load(new_name)
+    new_process.create()
     
     data_folders = source_process.get_data_folders()
     code_folders = source_process.get_code_folders()
@@ -3506,7 +3541,7 @@ def copy_process(source_process, target_process = None ):
         source_sub_process = source_process.get_sub_process(sub_folder)
         
         if not sub_process.is_process():
-            copy_process(source_sub_process, new_process)
+            copy_process(source_sub_process, new_process.get_path())
             
     if manifest_found:
         copy_process_code(source_process, new_process, 'manifest')

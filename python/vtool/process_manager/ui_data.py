@@ -239,6 +239,7 @@ class DataProcessWidget(qt_ui.DirectoryWidget):
                         keys = file_widgets.keys()
                         
                         for key in keys:
+                            
                             if key == data_type:
                                 widget = file_widgets[key]()
                                 
@@ -2202,7 +2203,7 @@ class SaveSkinFileWidget(DataSaveFileWidget):
     def _export_selected_data(self, second_only = False):
         version_up = True
         single_file = False
-        blend_weights = False
+        blend_weights = True
         long_names = False
         
         if self.data_class.settings.has_setting('version up'):
@@ -2906,12 +2907,32 @@ class FbxSaveFileWidget(DataSaveFileWidget):
     def _define_hide_buttons(self):
         
         self._hide_export = False
-        if util.in_houdini:
+        if util.in_houdini or util.in_unreal:
             self._hide_export = True
         self._hide_export_selected = False
         self._hide_import = False
         self._hide_import_selected = True
 
+class UsdFileWidget(GenericDataFileWidget):
+
+    def _define_data_class(self):
+        return data.UsdData()
+
+    def _define_main_tab_name(self):
+        return 'USD File'    
+
+    def _define_save_widget(self):
+        return UsdSaveFileWidget()
+
+class UsdSaveFileWidget(DataSaveFileWidget):
+    def _define_hide_buttons(self):
+        
+        self._hide_export = False
+        if util.in_houdini or util.in_unreal:
+            self._hide_export = True
+        self._hide_export_selected = False
+        self._hide_import = False
+        self._hide_import_selected = True
 
 class ProcessBuildDataWidget(MayaFileWidget):
     
@@ -2977,6 +2998,7 @@ class ProcessSaveFileWidget(MayaSaveFileWidget):
         self.main_layout.addWidget(open_button)
 
 data_name_map = {'agnostic.fbx' : 'FBX',
+                 'agnostic.usd' : 'USD',
                  'maya.binary': 'Binary File',
                  'maya.ascii' : 'Ascii File',
                  'maya.shotgun' : 'Shotgun Link',
@@ -2997,6 +3019,7 @@ data_name_map = {'agnostic.fbx' : 'FBX',
                  }
 
 file_widgets = { 'agnostic.fbx': FbxFileWidget,
+                 'agnostic.usd': UsdFileWidget,
                  'maya.binary' : MayaBinaryFileWidget,
                  'maya.ascii' : MayaAsciiFileWidget,
                  'maya.shotgun' : MayaShotgunLinkWidget,

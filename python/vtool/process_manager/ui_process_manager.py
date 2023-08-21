@@ -3,14 +3,13 @@
 from __future__ import absolute_import
 
 import sys
-import os
 from functools import wraps
 
 from .. import qt_ui, qt, maya_lib
 from .. import logger
 from .. import util_file
 from .. import util
-from ..ramen.ui_lib import ui_nodes 
+from ..ramen.ui_lib import ui_ramen 
 
 from . import process
 from . import ui_view
@@ -328,11 +327,17 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
         self.code_widget = ui_code.CodeProcessWidget()
         
-        self.ramen_widget = ui_nodes.NodeWindow()
+        ramen_spacer_widget = qt.QWidget()
+        layout = qt.QVBoxLayout()
+        ramen_spacer_widget.setLayout(layout)
+        self.ramen_widget = ui_ramen.MainWindow()
+        layout.addWidget(self.ramen_widget)
+        #self.ramen_widget = ui_nodes.NodeDirectoryWindow()
         
         self.process_tabs.addTab(self.option_widget, 'Options')
         self.process_tabs.addTab(self.data_widget, 'Data')
         self.process_tabs.addTab(self.code_widget, 'Code')
+        self.process_tabs.addTab(ramen_spacer_widget, 'Ramen')
         
         self.process_tabs.currentChanged.connect(self._tab_changed)
         
@@ -811,6 +816,8 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
         log.info('Update sidebar')
         
+        self.ramen_widget.hide()
+        
         if self.process_tabs.currentIndex() == 0:
             
             if self.misc_tabs.currentIndex() == 0:
@@ -828,6 +835,10 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
             self._load_data_ui()
         if self.process_tabs.currentIndex() == 3:
             self._load_code_ui()
+        if self.process_tabs.currentIndex() == 4:
+            self.ramen_widget.show()
+            self._load_ramen_ui()
+            
        
          
     def _update_path_filter(self, path):
@@ -1201,6 +1212,11 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         self.code_widget.set_external_code_library(code_directory)
         
         self.code_widget.set_settings(self.settings)
+        
+    def _load_ramen_ui(self):
+        path = self._get_current_path()
+        
+        self.ramen_widget.set_directory(path)
         
     def _get_current_name(self):
         
@@ -1676,15 +1692,17 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
             directory = str(self.project_directory)
             
         if directory and self.process_tabs.currentIndex() == 0:
-            util_file.open_browser(directory)
+            path = directory
         if directory and self.process_tabs.currentIndex() == 1:
-            util_file.open_browser(directory)            
+            path = directory            
         if directory and self.process_tabs.currentIndex() == 2:
             path = self.process.get_data_path()
-            util_file.open_browser(path)
         if directory and self.process_tabs.currentIndex() == 3:
-            path = self.process.get_code_path()
-            util_file.open_browser(path)   
+            path = self.process.get_code_path()   
+        if directory and self.process_tabs.currentIndex() == 4:
+            path = self.process.get_ramen_path()
+            
+        util_file.open_browser(path)
             
     def _template_current_changed(self):
         
@@ -1771,22 +1789,20 @@ class ProcessManagerWindow(qt_ui.BasicWindow):
         
     def set_project_directory(self, directory, name = ''):
         
-        log.debug('Setting project directory: %s' % directory)
+        log.info('Setting project directory: %s' % directory)
         
         self.handle_selection_change = False
         
         self.view_widget.tree_widget.clearSelection()
         
-        if type(directory) != list:
-            directory = ['', str(directory)]
-        
         if not directory:
-            
             self.process.set_directory(None)
             self.view_widget.set_directory(None)
             self.handle_selection_change = True
-            self.settings_widget.set_directory(None)
             return
+
+        if type(directory) != list:
+            directory = ['', str(directory)]
 
         directory = str(directory[1])
 

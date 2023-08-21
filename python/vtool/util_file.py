@@ -109,6 +109,10 @@ def get_vetala_directory():
     filepath = fix_slashes(filepath)
     return filepath
 
+def get_current_vetala_process_path():
+    filepath = util.get_env('VETALA_CURRENT_PROCESS')
+    filepath = fix_slashes(filepath)
+    return filepath
 
 class ProcessLog(object):
     
@@ -1911,6 +1915,8 @@ def get_json(filepath):
     if os.stat(filepath).st_size == 0:
         return
     
+    data = None
+    
     with open(filepath, 'r') as json_file:
                  
         try:
@@ -2187,7 +2193,7 @@ def remove_common_path_simple(path1, path2):
     
     if value > -1 and value == 0:
         sub_part = path2[len(path1):]
-        
+    
     if sub_part:
         if sub_part.startswith('/'):
             sub_part = sub_part[1:]
@@ -2627,6 +2633,10 @@ def fast_copy(directory, directory_destination):
 
     cmd=None
     if linux:
+        source_name = get_basename(directory)
+        destination_name = get_basename(directory_destination)
+        if source_name == destination_name:
+            directory_destination = get_dirname(directory_destination)        
         if not os.path.isdir(directory_destination):
             os.makedirs(directory_destination)
         #cmd = ['rsync', directory, directory_destination, '-ar']

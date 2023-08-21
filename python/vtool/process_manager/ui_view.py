@@ -225,6 +225,9 @@ class ViewProcessWidget(qt_ui.EditFileTreeWidget):
     def set_directory(self, directory, sub=False):
         
         if not directory:
+            self.directory = None
+            super(ViewProcessWidget,self).set_directory(self.directory, sub_path = None, name_filter = None)
+            self.refresh()
             return
         
         self.directory = directory
@@ -923,18 +926,15 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
         item = items[0]
         
         source_process = item.get_process()
-        target_process = item.get_parent_process()
         
         target_item = item.parent()
         
-        if not target_process:
-            target_process = process.Process()
-            target_process.set_directory(self.directory)
+        target_directory = util_file.get_dirname(source_process.get_path())
+         
+        if not target_item:
             target_item = self.invisibleRootItem()
         
-        
-        
-        new_process = process.copy_process(source_process, target_process)
+        new_process = process.copy_process(source_process, target_directory)
         
         if not new_process:
             return
@@ -1142,7 +1142,6 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
             
 
     def _load_processes(self, process_paths, folders = []):
-
         self.clear()
         
         if self.top_is_process:
@@ -1527,7 +1526,7 @@ class ProcessTreeWidget(qt_ui.FileTreeWidget):
             target_process.set_directory(self.directory)
             target_item = None 
         
-        new_process = process.copy_process(source_process, target_process)
+        new_process = process.copy_process(source_process, target_process.get_path())
         
         if not new_process:
             return

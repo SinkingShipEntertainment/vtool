@@ -391,11 +391,6 @@ class TreeWidget(qt.QTreeWidget):
         self.last_item = None
         self.current_item = None
         self.current_name = None
-        
-        
-        palette = qt.QPalette()
-        palette.setColor(palette.Highlight, qt.QtCore.Qt.gray)
-        self.setPalette(palette)
             
         self.dropIndicatorRect = qt.QtCore.QRect()
 
@@ -1828,9 +1823,11 @@ class FileManagerWidget(DirectoryWidget):
         
         self.history_buffer_widget.main_layout.addWidget(self.history_widget)
         
-        folder = self.data_class.get_folder()
-        
         history_directory = None
+        folder = None
+        
+        if self.data_class:
+            folder = self.data_class.get_folder()
         
         if folder:
             history_directory = self._get_history_directory(folder)
@@ -1886,6 +1883,8 @@ class FileManagerWidget(DirectoryWidget):
 class SaveFileWidget(DirectoryWidget):
     
     file_changed = create_signal()
+    save = create_signal()
+    open = create_signal()
     
     def __init__(self, parent = None):
         
@@ -1940,11 +1939,11 @@ class SaveFileWidget(DirectoryWidget):
         self.main_layout.setAlignment(qt.QtCore.Qt.AlignTop)
 
     def _save(self):
-        
+        self.save.emit()
         self.file_changed.emit()
     
     def _open(self):
-        pass
+        self.open.emit()
 
     def _create_io_tip(self):
         self.setToolTip(self.tip)
@@ -4076,7 +4075,11 @@ class CodeEdit(BasicWidget):
             text = in_file.readAll()
             in_file.close()
             
-            text = str(text)
+            if util.python_version < 3:
+                text = str(text)
+            else: 
+                text = str(text, 'utf-8')
+            
             self._suppress_code_changed_signal = True
             self.text_edit.setPlainText(text)
             self._suppress_code_changed_signal = False
