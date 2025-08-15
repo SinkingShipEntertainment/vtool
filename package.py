@@ -1,8 +1,7 @@
 name = 'vetala'
 
-# NOTE: This is actually coming from the latest "main" branch that was a little
-# more updated than the actual tag 0.6.174
-version = '0.6.174.sse.1.0.0'
+# NOTE: The formal version is 0.6.8.5, but 800 is used to play nice with vetala's past versioning.
+version = '0.6.800.5.sse.1.0.0'
 
 authors = [
     'Louis Vottero',
